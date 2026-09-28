@@ -1590,6 +1590,24 @@ function playFileMove(m) {
     sheet.animate([{ transform: 'scale(.965)', opacity: .35, filter: 'blur(2px)' }, { transform: 'none', opacity: 1, filter: 'none' }], { duration: 650, delay: 120, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
   }
 }
+/* ================= Account menu + color themes ================= */
+const HUES = [['green', 'Green', '#2e6341'], ['blue', 'Blue', '#1f4f7a'], ['red', 'Red', '#7a2430'], ['purple', 'Purple', '#553477'], ['graphite', 'Graphite', '#2b3034']];
+S.hue = 'green'; try { const h = localStorage.getItem('hp-hue'); if (h && HUES.some(x => x[0] === h)) S.hue = h; } catch (e) { }
+function applyHue() { HUES.forEach(([k]) => document.documentElement.classList.toggle('hue-' + k, S.hue === k && k !== 'green')); }
+applyHue();
+function acctMenu() {
+  const open = S.menu === 'acct';
+  return `<div class="acctwrap"><button class="avatarbtn" data-a="menu" data-v="acct" aria-expanded="${open}" aria-label="Account menu"><span class="avatar">JM</span></button>${open ? `<div class="menu-pop acctmenu" role="menu">
+    <div class="acct-h"><span class="avatar">JM</span><div><b>Janet Mills</b><span>Case manager</span></div></div><hr>
+    <button data-a="toast" data-v="Settings are coming soon" class="dim">${ic('gear', 16)} Settings <span class="soon">Coming soon</span></button>
+    <div class="acct-sub">${ic('grid', 16)} Theme</div>
+    <div class="swatches">${HUES.map(([k, l, c]) => `<button class="swatch ${S.hue === k ? 'on' : ''}" data-a="hue" data-v="${k}" aria-pressed="${S.hue === k}" title="${l}"><i style="background:linear-gradient(135deg,${c},color-mix(in srgb,${c} 55%,#000))"></i><span>${l}</span></button>`).join('')}</div><hr>
+    <button data-a="signout">${ic('arrowr', 16)} Sign out</button></div>` : ''}</div>`;
+}
+Object.assign(EXTRA, {
+  hue(t) { S.hue = t.dataset.v; try { localStorage.setItem('hp-hue', S.hue); } catch (e) { } applyHue(); S.menu = 'acct'; },
+  signout() { S.menu = null; try { sessionStorage.removeItem('hp-demo-unlocked'); } catch (e) { } if (document.getElementById('gate')) { location.reload(); return; } toast('Signed out. The hosted demo returns to the sign-in screen'); }
+});
 /* ================= Navigation model ================= */
 const NAV = [
   { g: 'Tools', d: 'Inbound work waiting to be filed or answered', items: [['uploads', 'Unattached Uploads', 'upload', 2, 'Files from providers not yet on a case'], ['comms', 'Communications', 'chat', 3, 'Provider and pharmacy messages'], ['acct', 'Account Requests', 'userplus', 0, 'New portal account approvals'], ['fax', 'Fax Transmissions', 'fax', 259, 'Inbound and outbound fax log', 'hot']] },
@@ -1613,7 +1631,7 @@ function shellA(content) {
     <div class="main"><header class="topbar"><button class="iconbtn mobile-only" data-a="navopen" aria-label="Open navigation">${ic('menu', 20)}</button>${mini ? `<button class="iconbtn" data-a="navmini" aria-label="Expand navigation">${ic('sidebar', 18)}</button>` : ''}<span class="grow"></span>${util()}</header>${content}</div></div>`;
 }
 function util() {
-  return `<div class="util"><label class="search">${ic('search', 16)}<span class="sr">Search</span><input placeholder="Search cases" data-a="gosearch"><kbd>/</kbd></label><button class="iconbtn" aria-label="Notifications" data-a="toast" data-v="3 new notifications">${ic('bell', 20)}<span class="dot"></span></button><span class="avatar">JM</span></div>`;
+  return `<div class="util"><label class="search">${ic('search', 16)}<span class="sr">Search</span><input placeholder="Search cases" data-a="gosearch"><kbd>/</kbd></label><button class="iconbtn" aria-label="Notifications" data-a="toast" data-v="3 new notifications">${ic('bell', 20)}<span class="dot"></span></button>${acctMenu()}</div>`;
 }
 function shellB(content) {
   const menu = [['dashboard', 'Dashboard'], ['work', 'Work queues', ['Tools', 'Boards']], ['clinical', 'Clinical', ['Clinical']], ['orgs', 'Organizations', ['Organizations']], ['admin', 'Admin', ['Admin']]];
