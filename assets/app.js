@@ -176,7 +176,7 @@ const S = {
   openMs: null, msq: '', menu: null, mega: null, navMini: false, navOpen: false, dockL: true, dockR: true, sel: CASES[0].id, side: true,
   strip: true, cols: { prescriber: window.innerWidth >= 1600, pap: false, rx: false, owner: true }, toast: null, modal: null, notesPanel: false, wl: 'today', qtab: 'All', expanded: {}, sort: { k: 'follow', d: 1 }
 };
-try { const d = localStorage.getItem('hp-dir3'); if (d && 'ABCD'.includes(d)) S.dir = d;  } catch (e) { }
+try { const d = localStorage.getItem('hp-dir3'); if (d && 'ABCDEF'.includes(d)) S.dir = d;  } catch (e) { }
 
 /* ================= Filtering ================= */
 function matches(c, skip) {
@@ -1558,7 +1558,7 @@ const RECORD_ROUTES = ['case', 'patient', 'facility', 'carrier', 'pbm'];
 let FILE_MOVE = null;
 function stageEl() { const p = document.querySelector('#root .center > .page') || document.querySelector('#root .main > .page') || document.querySelector('#root > .page, #root .workspace + .page') || [...document.querySelectorAll('#root .page')][0]; return p; }
 function fileMove(prev, next) {
-  if (S.dir !== 'D' || !prev || prev === next || matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
+  if (!isModern() || !prev || prev === next || matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
   const open = RECORD_ROUTES.includes(next) && (!RECORD_ROUTES.includes(prev) || prev !== next);
   const close = RECORD_ROUTES.includes(prev) && !RECORD_ROUTES.includes(next);
   if (!open && !close) return null;
@@ -1682,9 +1682,10 @@ function toast(msg) { S.toast = msg; clearTimeout(toastT); toastT = setTimeout((
 
 /* ================= Render ================= */
 const isTop = () => S.dir !== 'A';
-const DIRS = { D: ['Modern', 'Same layout as A with brand gradients, a softly moving ambient background, frosted glass panels and smoother motion.'], A: ['Left nav', 'Refined version of today\'s layout. Full labeled nav, open by default. Patient panel docks on the right.'], B: ['Top nav + white', 'White top nav with mega menus. Frees the full width for docked filter, patient and activity panels.'], C: ['Top nav + green', 'Green top nav, and every side panel takes the same green theme as the nav.'] };
+const isModern = () => 'DEF'.includes(S.dir);
+const DIRS = { E: ['Modern, green panels', 'Modern with the green brand gradient on both side panels, left and right.'], F: ['Dark', 'A dark take on Modern: deep green-black surfaces, glowing brand accents, same layout and motion.'], D: ['Modern', 'Same layout as A with brand gradients, a softly moving ambient background, frosted glass panels and smoother motion.'], A: ['Left nav', 'Refined version of today\'s layout. Full labeled nav, open by default. Patient panel docks on the right.'], B: ['Top nav + white', 'White top nav with mega menus. Frees the full width for docked filter, patient and activity panels.'], C: ['Top nav + green', 'Green top nav, and every side panel takes the same green theme as the nav.'] };
 function reviewBar() {
-  return `<div class="review" role="region" aria-label="Prototype controls"><b>HealthPacer Hub</b><span>Direction</span><div class="seg">${[['D', 'A'], ['C', 'B'], ['B', 'C'], ['A', 'D']].map(([k, shown]) => `<button data-a="dir" data-v="${k}" aria-pressed="${S.dir === k}">${shown} · ${DIRS[k][0]}</button>`).join('')}</div>
+  return `<div class="review" role="region" aria-label="Prototype controls"><b>HealthPacer Hub</b><span>Direction</span><div class="seg">${[['D', 'A'], ['C', 'B'], ['B', 'C'], ['A', 'D'], ['E', 'E'], ['F', 'F']].map(([k, shown]) => `<button data-a="dir" data-v="${k}" aria-pressed="${S.dir === k}">${shown} · ${DIRS[k][0]}</button>`).join('')}</div>
   <span class="why">${DIRS[S.dir][1]}</span><span class="sp"></span>
   
   <button class="pill-btn" data-a="notes" aria-pressed="${S.notesPanel}">${ic('check', 14)} Feedback addressed</button></div>`;
@@ -1710,15 +1711,17 @@ function render() {
     carrier: () => orgDetail(CARRIERS.find(x => x.id === S.detail.org) || CARRIERS[0], 'carriers', 'Carriers'), pbm: () => orgDetail(PBMS.find(x => x.id === S.detail.org) || PBMS[0], 'pbms', 'PBMs'),
     expauth: () => viewBoard('Authorization'), expben: () => viewBoard('Benefits'), intake: viewIntake, created: viewCreated };
   document.body.classList.toggle('nav-white', S.dir === 'B');
-  document.body.classList.toggle('theme-green', S.dir === 'C' || S.dir === 'D');
-  document.body.classList.toggle('theme-modern', S.dir === 'D');
+  document.body.classList.toggle('theme-green', 'CDEF'.includes(S.dir));
+  document.body.classList.toggle('theme-modern', isModern());
+  document.body.classList.toggle('green-both', S.dir === 'E');
+  document.body.classList.toggle('theme-dark', S.dir === 'F');
   { const key = S.dir + '|' + S.route + '|' + S.caseId + '|' + (S.detail.facility || '') + (S.detail.org || '') + (S.detail.patient || '') + (S.ik ? (S.ik.step === 'search' ? 's' : 'w') : '');
     const tkey = key + '|' + S.tab + '|' + JSON.stringify(S.tab2);
     const dkey = [S.dockL, S.dockR, S.side, S.fpA].join();
     const flag = (cls, ms) => { document.body.classList.add(cls); clearTimeout(ANIM_T[cls]); ANIM_T[cls] = setTimeout(() => document.body.classList.remove(cls), ms); };
     FILE_MOVE = fileMove(ANIM_K.route, S.route);
     IK_MOVE = S.route === 'intake' && ANIM_K.route === 'intake' ? ikCapture(ANIM_K.ikstep, S.ik && S.ik.step) : null; ANIM_K.ikstep = S.ik && S.ik.step;
-    if (S.dir === 'D') { if (FILE_MOVE) flag('anim-dock', 700); else if (key !== ANIM_K.page) flag('anim-page', 900); else if (tkey !== ANIM_K.tab) flag('anim-tab', 600); if (dkey !== ANIM_K.dock && ANIM_K.dock) flag('anim-dock', 600); }
+    if (isModern()) { if (FILE_MOVE) flag('anim-dock', 700); else if (key !== ANIM_K.page) flag('anim-page', 900); else if (tkey !== ANIM_K.tab) flag('anim-tab', 600); if (dkey !== ANIM_K.dock && ANIM_K.dock) flag('anim-dock', 600); }
     ANIM_K.route = S.route; ANIM_K.page = key; ANIM_K.tab = tkey; ANIM_K.dock = dkey; }
   if (V[S.route]) {
     body = (S.dir === 'A' ? shellA : shellB)(V[S.route]());
