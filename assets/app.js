@@ -176,7 +176,7 @@ const S = {
   openMs: null, msq: '', menu: null, mega: null, navMini: false, navOpen: false, dockL: true, dockR: true, sel: CASES[0].id, side: true,
   strip: true, cols: { prescriber: window.innerWidth >= 1600, pap: false, rx: false, owner: true }, toast: null, modal: null, notesPanel: false, wl: 'today', qtab: 'All', expanded: {}, sort: { k: 'follow', d: 1 }
 };
-try { const d = localStorage.getItem('hp-dir3'); if (d && 'ABCDEF'.includes(d)) S.dir = d;  } catch (e) { }
+try { const d = localStorage.getItem('hp-dir3'); if (d && 'ABCDEFGH'.includes(d)) S.dir = d;  } catch (e) { }
 
 /* ================= Filtering ================= */
 function matches(c, skip) {
@@ -1526,15 +1526,20 @@ Object.assign(EXTRA, {
 function dockKey(el) { return (el.getAttribute('aria-label') || '') + (el.classList.contains('right') ? ':R' : ':L'); }
 function dockWidths() {
   const m = {};
-  document.querySelectorAll('.dock').forEach(d => { m[dockKey(d)] = { w: d.getBoundingClientRect().width, closed: d.classList.contains('closed') }; });
+  document.querySelectorAll('.dock').forEach(d => { const r = d.getBoundingClientRect(); m[dockKey(d)] = { w: r.width, closed: d.classList.contains('closed'), rect: r, clone: document.body.classList.contains('float-docks') && !d.classList.contains('closed') ? d.cloneNode(true) : null }; });
+  const c = document.querySelector('.stack-docks .workspace > .center');
+  if (c) { const cs = getComputedStyle(c); m.__center = { ml: cs.marginLeft, mr: cs.marginRight, t: cs.transform, sh: cs.boxShadow }; document.querySelectorAll('.stack-docks .workspace > .dock').forEach(d => { const k = dockKey(d); if (m[k]) { const ds = getComputedStyle(d); m[k].t = ds.transform; m[k].f = ds.filter; } }); }
   const wf = document.querySelector('.withfilters'); if (wf) m.__wf = { cols: getComputedStyle(wf).gridTemplateColumns, closed: wf.classList.contains('fclosed') };
   return m;
 }
 function animateDocks(pre) {
   if (!pre || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const spring = (a, b) => { const d = b - a, o = Math.sign(d) * Math.min(14, Math.abs(d) * .05); return [[a, 0, 'cubic-bezier(.5,0,.25,1)'], [b + o, .62, 'ease-in-out'], [b - o * .45, .8, 'ease-in-out'], [b + o * .15, .92, 'ease-out'], [b, 1]].map(([w, offset, easing]) => easing ? { width: w + 'px', offset, easing } : { width: w + 'px', offset }); };
+  const floating = document.body.classList.contains('float-docks');
+  if (document.body.classList.contains('stack-docks')) { stackAnimate(pre); return; }
   document.querySelectorAll('.dock').forEach(d => {
     const p = pre[dockKey(d)]; if (!p) return; const closed = d.classList.contains('closed'); if (p.closed === closed) return;
+    if (floating) { foldDock(d, p, closed); return; }
     const to = d.getBoundingClientRect().width;
     d.animate(spring(p.w, to), { duration: 720 });
     const body = d.querySelector('.dock-body');
@@ -1552,6 +1557,64 @@ function ripple(el, closed) {
   el.classList.remove('rip-open', 'rip-close'); void el.offsetWidth;
   const cls = closed ? 'rip-close' : 'rip-open';
   setTimeout(() => { el.classList.add(cls); setTimeout(() => el.classList.remove(cls), 900); }, closed ? 430 : 450);
+}
+
+/* Floating panels: fold out from an edge-on card, fold back to the edge */
+function foldDock(d, p, closed) {
+  const right = d.classList.contains('right'); const sgn = right ? 1 : -1;
+  const to = d.getBoundingClientRect().width;
+  const EASE = 'cubic-bezier(.2,.8,.2,1)';
+  if (!closed) d.animate([{ width: p.w + 'px' }, { width: to + 'px' }], { duration: 460, easing: 'cubic-bezier(.5,0,.25,1)', fill: 'backwards' });
+  if (!closed) {
+    d.style.transformOrigin = right ? '100% 50%' : '0% 50%';
+    d.animate([
+      { transform: `perspective(1400px) rotateY(${sgn * 84}deg) scaleY(.92)`, opacity: .6, offset: 0 },
+      { transform: `perspective(1400px) rotateY(${sgn * -7}deg) translateZ(30px) scaleY(1.01)`, opacity: 1, offset: .7 },
+      { transform: `perspective(1400px) rotateY(${sgn * 2}deg)`, offset: .88 },
+      { transform: 'none', opacity: 1, offset: 1 }], { duration: 760, easing: EASE });
+    const body = d.querySelector('.dock-body');
+    if (body) body.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 360, delay: 260, fill: 'backwards' });
+  } else if (p.clone) {
+    const g = p.clone; g.classList.add('fold-ghost'); g.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+    Object.assign(g.style, { position: 'fixed', left: p.rect.left + 'px', top: p.rect.top + 'px', width: p.rect.width + 'px', height: p.rect.height + 'px', margin: 0, zIndex: 40, transformOrigin: right ? '100% 50%' : '0% 50%' });
+    document.body.appendChild(g);
+    const gb = g.querySelector('.dock-body'); if (gb) gb.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, delay: 160, easing: 'ease-in', fill: 'forwards' });
+    g.animate([
+      { transform: 'none', opacity: 1, offset: 0 },
+      { transform: `perspective(1400px) rotateY(${sgn * 2}deg)`, offset: .12 },
+      { transform: `perspective(1400px) rotateY(${sgn * -7}deg) translateZ(30px) scaleY(1.01)`, opacity: 1, offset: .3 },
+      { transform: `perspective(1400px) rotateY(${sgn * 84}deg) scaleY(.92)`, opacity: .6, offset: 1 }], { duration: 700, easing: 'cubic-bezier(.55,0,.75,.35)', fill: 'forwards' }).onfinish = () => g.remove();
+    d.animate([{ width: p.w + 'px' }, { width: to + 'px' }], { duration: 460, delay: 300, easing: 'cubic-bezier(.75,0,.5,1)', fill: 'backwards', composite: 'replace' });
+    d.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: 700, fill: 'backwards' });
+  }
+  setTimeout(() => ripple(d, closed), closed ? 360 : 0);
+}
+
+/* Layered cards (H): the page slides back / forward over the tucked panels */
+function stackAnimate(pre) {
+  const EASE = 'cubic-bezier(.2,.8,.2,1)', DUR = 640;
+  let changed = false;
+  document.querySelectorAll('.workspace > .dock').forEach(d => {
+    const p = pre[dockKey(d)]; if (!p || p.t === undefined) return; const closed = d.classList.contains('closed'); if (p.closed === closed) return;
+    changed = true;
+    const ds = getComputedStyle(d);
+    d.animate([{ transform: p.t, filter: p.f }, { transform: ds.transform, filter: ds.filter }], { duration: DUR, easing: EASE });
+    const body = d.querySelector('.dock-body'), head = [...d.querySelectorAll('.dock-head > :not(svg):not(.vlabel)')], lab = d.querySelector('.vlabel');
+    const shift = d.classList.contains('right') ? 24 : -24;
+    if (closed) {
+      [body, ...head].forEach(el => el && el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 240, easing: 'ease-in' }));
+      if (lab) lab.animate([{ opacity: 0, transform: 'rotate(180deg) translateY(10px)' }, { opacity: 1, transform: 'rotate(180deg)' }], { duration: 360, delay: 320, easing: EASE, fill: 'backwards' });
+    } else {
+      if (lab) lab.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: 'ease-in' });
+      [body, ...head].forEach(el => el && el.animate([{ opacity: 0, transform: `translateX(${shift}px)` }, { opacity: 1, transform: 'none' }], { duration: 440, delay: 200, easing: EASE, fill: 'backwards' }));
+    }
+    setTimeout(() => ripple(d, closed), 380);
+  });
+  const c = document.querySelector('.workspace > .center'), pc = pre.__center;
+  if (changed && c && pc) {
+    const cs = getComputedStyle(c);
+    c.animate([{ marginLeft: pc.ml, marginRight: pc.mr, transform: pc.t, boxShadow: pc.sh }, { marginLeft: cs.marginLeft, marginRight: cs.marginRight, transform: cs.transform, boxShadow: cs.boxShadow }], { duration: DUR, easing: EASE });
+  }
 }
 /* ================= Modern: record opens like paper pulled from a file ================= */
 const RECORD_ROUTES = ['case', 'patient', 'facility', 'carrier', 'pbm'];
@@ -1700,10 +1763,10 @@ function toast(msg) { S.toast = msg; clearTimeout(toastT); toastT = setTimeout((
 
 /* ================= Render ================= */
 const isTop = () => S.dir !== 'A';
-const isModern = () => 'DEF'.includes(S.dir);
-const DIRS = { E: ['Modern, green panels', 'Modern with the green brand gradient on both side panels, left and right.'], F: ['Dark', 'A dark take on Modern: deep green-black surfaces, glowing brand accents, same layout and motion.'], D: ['Modern', 'Same layout as A with brand gradients, a softly moving ambient background, frosted glass panels and smoother motion.'], A: ['Left nav', 'Refined version of today\'s layout. Full labeled nav, open by default. Patient panel docks on the right.'], B: ['Top nav + white', 'White top nav with mega menus. Frees the full width for docked filter, patient and activity panels.'], C: ['Top nav + green', 'Green top nav, and every side panel takes the same green theme as the nav.'] };
+const isModern = () => 'DEFGH'.includes(S.dir);
+const DIRS = { H: ['Layered cards', 'Side panels sit as cards behind the page with only their icons peeking out. Open one and the page shrinks back to reveal it.'], G: ['Floating panels', 'Modern with side panels turned edge-on like cards. Click one to fold it out as a detached, floating panel.'], E: ['Modern, green panels', 'Modern with the green brand gradient on both side panels, left and right.'], F: ['Dark', 'A dark take on Modern: deep green-black surfaces, glowing brand accents, same layout and motion.'], D: ['Modern', 'Same layout as A with brand gradients, a softly moving ambient background, frosted glass panels and smoother motion.'], A: ['Left nav', 'Refined version of today\'s layout. Full labeled nav, open by default. Patient panel docks on the right.'], B: ['Top nav + white', 'White top nav with mega menus. Frees the full width for docked filter, patient and activity panels.'], C: ['Top nav + green', 'Green top nav, and every side panel takes the same green theme as the nav.'] };
 function reviewBar() {
-  return `<div class="review" role="region" aria-label="Prototype controls"><b>HealthPacer Hub</b><span>Direction</span><div class="seg">${[['D', 'A'], ['C', 'B'], ['B', 'C'], ['A', 'D'], ['E', 'E'], ['F', 'F']].map(([k, shown]) => `<button data-a="dir" data-v="${k}" aria-pressed="${S.dir === k}">${shown} · ${DIRS[k][0]}</button>`).join('')}</div>
+  return `<div class="review" role="region" aria-label="Prototype controls"><b>HealthPacer Hub</b><span>Direction</span><div class="seg">${[['D', 'A'], ['C', 'B'], ['B', 'C'], ['A', 'D'], ['E', 'E'], ['F', 'F'], ['G', 'G'], ['H', 'H']].map(([k, shown]) => `<button data-a="dir" data-v="${k}" aria-pressed="${S.dir === k}">${shown} · ${DIRS[k][0]}</button>`).join('')}</div>
   <span class="why">${DIRS[S.dir][1]}</span><span class="sp"></span>
   
   <button class="pill-btn" data-a="notes" aria-pressed="${S.notesPanel}">${ic('check', 14)} Feedback addressed</button></div>`;
@@ -1729,10 +1792,12 @@ function render() {
     carrier: () => orgDetail(CARRIERS.find(x => x.id === S.detail.org) || CARRIERS[0], 'carriers', 'Carriers'), pbm: () => orgDetail(PBMS.find(x => x.id === S.detail.org) || PBMS[0], 'pbms', 'PBMs'),
     expauth: () => viewBoard('Authorization'), expben: () => viewBoard('Benefits'), intake: viewIntake, created: viewCreated };
   document.body.classList.toggle('nav-white', S.dir === 'B');
-  document.body.classList.toggle('theme-green', 'CDEF'.includes(S.dir));
+  document.body.classList.toggle('theme-green', 'CDEFGH'.includes(S.dir));
   document.body.classList.toggle('theme-modern', isModern());
   document.body.classList.toggle('green-both', S.dir === 'E');
   document.body.classList.toggle('theme-dark', S.dir === 'F');
+  document.body.classList.toggle('float-docks', S.dir === 'G');
+  document.body.classList.toggle('stack-docks', S.dir === 'H');
   { const key = S.dir + '|' + S.route + '|' + S.caseId + '|' + (S.detail.facility || '') + (S.detail.org || '') + (S.detail.patient || '') + (S.ik ? (S.ik.step === 'search' ? 's' : 'w') : '');
     const tkey = key + '|' + S.tab + '|' + JSON.stringify(S.tab2);
     const dkey = [S.dockL, S.dockR, S.side, S.fpA].join();
@@ -1781,7 +1846,7 @@ document.addEventListener('click', (e) => {
   const c = byId(S.caseId);
   if (EXTRA[a]) { if (t.tagName !== 'INPUT') e.preventDefault(); EXTRA[a](t, e); render(); return; }
   switch (a) {
-    case 'dir': if (!DIRS[v]) break; S.dir = v; S.mega = null; try { localStorage.setItem('hp-dir3', v); } catch (x) { } break;
+    case 'dir': if (!DIRS[v]) break; if (v === 'H' && S.dir !== 'H') { S.dockL = false; S.dockR = false; } S.dir = v; S.mega = null; try { localStorage.setItem('hp-dir3', v); } catch (x) { } break;
     case 'go': return go(t.dataset.r);
     case 'case': e.stopPropagation(); return openCase(t.dataset.id);
     case 'sel': S.sel = t.dataset.id; S.dockR = true; break;

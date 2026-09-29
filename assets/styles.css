@@ -1,5 +1,4 @@
-[hidden]{display:none!important}
-img{max-width:100%}
+
 :root{
   color-scheme: light;
   --ink:#1c3246; --ink-2:#3f5467; --muted:#5d7182; --faint:#8a9aa8;
@@ -1164,6 +1163,60 @@ body,.topnav,.dock,.sidenav,.btn.primary{transition:background-color .35s ease,b
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
+/* =================== G · Floating panels =================== */
+.float-docks .workspace{perspective:1600px;align-items:flex-start}
+.float-docks .dock{position:sticky;top:72px;height:calc(100vh - 84px);margin:12px 12px 12px 12px;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.55);box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 24px 60px -18px rgba(22,40,30,.45),0 8px 18px -10px rgba(22,40,30,.3);transform-style:preserve-3d}
+.float-docks .dock:not(.right){margin-right:4px}
+.float-docks .dock.right{margin-left:4px;background:rgba(255,255,255,.72)}
+.float-docks .dock-head{border-radius:18px 18px 0 0}
+.float-docks .workspace > .center .page{padding-left:18px;padding-right:18px}
+/* Edge-on (collapsed) */
+.float-docks .workspace > .dock.closed{width:26px;margin:18px 14px;border-radius:13px;border:0;cursor:pointer;overflow:visible;
+  background:linear-gradient(90deg,rgba(0,0,0,.18),rgba(255,255,255,.22) 45%,rgba(0,0,0,.12)),var(--edge,linear-gradient(180deg,#4a8660,#1f4a2f));
+  box-shadow:0 18px 30px -12px rgba(22,40,30,.5),inset 0 0 0 1px rgba(255,255,255,.25);transform:perspective(700px) rotateY(-32deg);transform-origin:0 50%;transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s}
+.float-docks .dock.right.closed{transform:perspective(700px) rotateY(32deg);transform-origin:100% 50%;--edge:linear-gradient(180deg,#f4f7f5,#d6e0da)}
+.float-docks .dock.closed:hover{transform:perspective(700px) rotateY(-14deg) translateX(3px);box-shadow:0 22px 36px -12px rgba(22,40,30,.55),inset 0 0 0 1px rgba(255,255,255,.4)}
+.float-docks .dock.right.closed:hover{transform:perspective(700px) rotateY(14deg) translateX(-3px)}
+.float-docks .dock.closed .dock-head{background:none!important;padding:14px 0;gap:10px;align-items:center;border:0;backdrop-filter:none}
+.float-docks .dock.closed .dock-head > svg{width:14px;height:14px;color:#fff;opacity:.9}
+.float-docks .dock.right.closed .dock-head > svg{color:var(--green-700)}
+.float-docks .dock.closed .iconbtn{display:none}
+.float-docks .dock.closed .vlabel{font-size:10.5px;letter-spacing:.14em;color:#fff;margin-top:4px;text-shadow:0 1px 1px rgba(0,0,0,.25)}
+.float-docks .dock.right.closed .vlabel{color:var(--green-700);text-shadow:none}
+.float-docks .dock.closed::after,.float-docks .dock.closed::before{display:none}
+.fold-ghost{pointer-events:none;border-radius:18px;overflow:hidden;box-shadow:0 24px 60px -18px rgba(22,40,30,.45)}
+.theme-dark.float-docks .dock{border-color:rgba(255,255,255,.08);box-shadow:0 24px 60px -18px rgba(0,0,0,.7)}
+.theme-dark.float-docks .dock.right.closed{--edge:linear-gradient(180deg,#2a3a32,#16211b)}
+.theme-dark.float-docks .dock.right.closed .vlabel,.theme-dark.float-docks .dock.right.closed .dock-head > svg{color:#cfe3d5}
+@media (max-width:900px){.float-docks .dock{display:none}}
+/* =================== H · Layered cards =================== */
+.stack-docks .workspace{align-items:flex-start;padding:0 12px;min-height:calc(100vh - 60px)}
+.stack-docks .workspace > .dock,.stack-docks .workspace > .dock.closed{width:320px!important;flex:none;position:sticky;top:72px;height:calc(100vh - 84px);margin:12px 0;border-radius:18px;overflow:hidden;z-index:1;border:1px solid rgba(255,255,255,.5);box-shadow:0 18px 40px -20px rgba(22,40,30,.4);transition:transform .6s cubic-bezier(.2,.8,.2,1),filter .6s,box-shadow .6s;cursor:default}
+.stack-docks .dock.closed .dock-body{display:flex!important}
+.stack-docks .dock.closed .dock-head{flex-direction:row;padding:12px 12px 12px 16px;border-bottom:1px solid var(--line-2)}
+.stack-docks .dock.closed .dock-head h3,.stack-docks .dock.closed .dock-head .x{display:revert}
+.stack-docks .dock .vlabel{display:none}.stack-docks .dock.closed .vlabel{display:block;position:absolute;top:60px;left:21px;margin:0;opacity:1!important;pointer-events:none;font:700 12px var(--f-head);letter-spacing:.16em;text-transform:uppercase;color:inherit;white-space:nowrap}.stack-docks .dock.right.closed .vlabel{left:auto;right:21px}
+.stack-docks .dock .dock-body,.stack-docks .dock .dock-head > :not(svg){transition:opacity .35s ease .15s}
+.stack-docks .dock.closed .dock-body,.stack-docks .dock.closed .dock-head > :not(svg){opacity:0;transition-delay:0s;pointer-events:none}
+.stack-docks .dock.closed .dock-head{border-bottom-color:transparent;background:transparent!important}
+.stack-docks .dock.closed > .dock-head > svg{width:22px;height:22px;margin:4px 2px}
+.stack-docks .dock.right.closed .dock-head{flex-direction:row-reverse}
+.stack-docks .dock.closed{transform:scale(.95);filter:saturate(.85) brightness(.97);cursor:pointer}
+.stack-docks .dock.closed:not(.right){transform-origin:0 50%}.stack-docks .dock.right.closed{transform-origin:100% 50%}
+.stack-docks .dock.closed:hover{transform:scale(.965) translateX(4px)}
+.stack-docks .dock.right.closed:hover{transform:scale(.965) translateX(-4px)}
+.stack-docks .dock.closed > .dock-head > svg{width:20px;height:20px}
+.stack-docks .dock::after,.stack-docks .dock::before{z-index:0}
+.stack-docks .dock.right{background:rgba(255,255,255,.8)}
+.stack-docks .workspace > .center{position:relative;z-index:2;margin:12px 12px;min-height:calc(100vh - 84px);border-radius:20px;background:rgba(241,246,243,.9);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.8);box-shadow:0 30px 70px -24px rgba(22,40,30,.4),0 0 0 1px rgba(255,255,255,.4) inset;transition:margin .62s cubic-bezier(.2,.8,.2,1),transform .62s cubic-bezier(.2,.8,.2,1),box-shadow .62s,filter .62s;transform-origin:50% 30%}
+.stack-docks .workspace:has(> .dock:not(.right).closed) > .center{margin-left:-262px}
+.stack-docks .workspace:has(> .dock.right.closed) > .center{margin-right:-262px}
+.stack-docks .workspace:has(> .dock:not(.closed)) > .center{transform:scale(.985);box-shadow:0 14px 34px -20px rgba(22,40,30,.35);filter:saturate(.97)}
+.stack-docks .workspace:has(> .dock:not(.closed)) > .center:hover{transform:none;filter:none}
+.stack-docks .workspace:not(:has(> .dock:not(.right))) > .center{margin-left:0}
+.stack-docks .workspace:not(:has(> .dock.right)) > .center{margin-right:0}
+.stack-docks .workspace > .center .page{padding:16px 20px 32px}
+@media (max-width:900px){.stack-docks .workspace > .dock{display:none!important}.stack-docks .workspace > .center{margin:0!important}}
 /* ==GEN-HUES== */
 html.hue-blue{--hover:#eaeef3;--green:#3d5571;--green-700:#2c3f55;--green-50:#eaeef3;--green-100:#d3dce6;--green-grad:linear-gradient(135deg,#4f6b8a 0%,#233953 100%)}
 html.hue-blue .rail .railbtn{color:#dce3eb}
@@ -1276,6 +1329,16 @@ html.hue-blue .theme-dark .withfilters .fpanel{background:rgba(22,28,34,.66)}
 html.hue-blue .theme-dark .dock, html.hue-blue .theme-dark .fpanel{--rip:rgba(95,127,164,.25);--rip-line:rgba(159,185,214,.7)}
 html.hue-blue .theme-dark .topnav .util .avatar{background:#e4e8ec;color:#1d2c3d}
 html.hue-blue .theme-dark .docpreview .sheet{background:#e9ecef}
+html.hue-blue .float-docks .dock{box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 24px 60px -18px rgba(22,30,40,.45),0 8px 18px -10px rgba(22,30,40,.3)}
+html.hue-blue .float-docks .workspace > .dock.closed{background:linear-gradient(90deg,rgba(0,0,0,.18),rgba(255,255,255,.22) 45%,rgba(0,0,0,.12)),var(--edge,linear-gradient(180deg,#4a6686,#1f334a));box-shadow:0 18px 30px -12px rgba(22,30,40,.5),inset 0 0 0 1px rgba(255,255,255,.25)}
+html.hue-blue .float-docks .dock.right.closed{--edge:linear-gradient(180deg,#f4f5f7,#d6dbe0)}
+html.hue-blue .float-docks .dock.closed:hover{box-shadow:0 22px 36px -12px rgba(22,30,40,.55),inset 0 0 0 1px rgba(255,255,255,.4)}
+html.hue-blue .fold-ghost{box-shadow:0 24px 60px -18px rgba(22,30,40,.45)}
+html.hue-blue .theme-dark.float-docks .dock.right.closed{--edge:linear-gradient(180deg,#2a313a,#161b21)}
+html.hue-blue .theme-dark.float-docks .dock.right.closed .vlabel, html.hue-blue .theme-dark.float-docks .dock.right.closed .dock-head > svg{color:#cfd8e3}
+html.hue-blue .stack-docks .workspace > .dock, html.hue-blue .stack-docks .workspace > .dock.closed{box-shadow:0 18px 40px -20px rgba(22,30,40,.4)}
+html.hue-blue .stack-docks .workspace > .center{background:rgba(241,243,246,.9);box-shadow:0 30px 70px -24px rgba(22,30,40,.4),0 0 0 1px rgba(255,255,255,.4) inset}
+html.hue-blue .stack-docks .workspace:has(> .dock:not(.closed)) > .center{box-shadow:0 14px 34px -20px rgba(22,30,40,.35)}
 html.hue-red{--hover:#f3eaeb;--green:#703e45;--green-700:#542d32;--green-50:#f3eaeb;--green-100:#e6d3d6;--green-grad:linear-gradient(135deg,#895058 0%,#52242a 100%)}
 html.hue-red .rail .railbtn{color:#ebdcde}
 html.hue-red .dropzone{border:1.5px dashed #b7a0a3}
@@ -1387,6 +1450,16 @@ html.hue-red .theme-dark .withfilters .fpanel{background:rgba(34,22,24,.66)}
 html.hue-red .theme-dark .dock, html.hue-red .theme-dark .fpanel{--rip:rgba(162,97,105,.25);--rip-line:rgba(213,160,167,.7)}
 html.hue-red .theme-dark .topnav .util .avatar{background:#ece4e5;color:#3c1e22}
 html.hue-red .theme-dark .docpreview .sheet{background:#efe9ea}
+html.hue-red .float-docks .dock{box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 24px 60px -18px rgba(40,22,25,.45),0 8px 18px -10px rgba(40,22,25,.3)}
+html.hue-red .float-docks .workspace > .dock.closed{background:linear-gradient(90deg,rgba(0,0,0,.18),rgba(255,255,255,.22) 45%,rgba(0,0,0,.12)),var(--edge,linear-gradient(180deg,#844c53,#492026));box-shadow:0 18px 30px -12px rgba(40,22,25,.5),inset 0 0 0 1px rgba(255,255,255,.25)}
+html.hue-red .float-docks .dock.right.closed{--edge:linear-gradient(180deg,#f7f4f4,#e0d6d8)}
+html.hue-red .float-docks .dock.closed:hover{box-shadow:0 22px 36px -12px rgba(40,22,25,.55),inset 0 0 0 1px rgba(255,255,255,.4)}
+html.hue-red .fold-ghost{box-shadow:0 24px 60px -18px rgba(40,22,25,.45)}
+html.hue-red .theme-dark.float-docks .dock.right.closed{--edge:linear-gradient(180deg,#3a2a2c,#211618)}
+html.hue-red .theme-dark.float-docks .dock.right.closed .vlabel, html.hue-red .theme-dark.float-docks .dock.right.closed .dock-head > svg{color:#e2d0d2}
+html.hue-red .stack-docks .workspace > .dock, html.hue-red .stack-docks .workspace > .dock.closed{box-shadow:0 18px 40px -20px rgba(40,22,25,.4)}
+html.hue-red .stack-docks .workspace > .center{background:rgba(246,241,242,.9);box-shadow:0 30px 70px -24px rgba(40,22,25,.4),0 0 0 1px rgba(255,255,255,.4) inset}
+html.hue-red .stack-docks .workspace:has(> .dock:not(.closed)) > .center{box-shadow:0 14px 34px -20px rgba(40,22,25,.35)}
 html.hue-purple{--hover:#efeaf3;--green:#593e70;--green-700:#422d54;--green-50:#efeaf3;--green-100:#ddd3e6;--green-grad:linear-gradient(135deg,#6e5089 0%,#3d2452 100%)}
 html.hue-purple .rail .railbtn{color:#e4dceb}
 html.hue-purple .dropzone{border:1.5px dashed #aca0b7}
@@ -1498,6 +1571,16 @@ html.hue-purple .theme-dark .withfilters .fpanel{background:rgba(28,22,34,.66)}
 html.hue-purple .theme-dark .dock, html.hue-purple .theme-dark .fpanel{--rip:rgba(132,97,162,.25);--rip-line:rgba(188,160,213,.7)}
 html.hue-purple .theme-dark .topnav .util .avatar{background:#e8e4ec;color:#2e1e3c}
 html.hue-purple .theme-dark .docpreview .sheet{background:#ece9ef}
+html.hue-purple .float-docks .dock{box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 24px 60px -18px rgba(32,22,40,.45),0 8px 18px -10px rgba(32,22,40,.3)}
+html.hue-purple .float-docks .workspace > .dock.closed{background:linear-gradient(90deg,rgba(0,0,0,.18),rgba(255,255,255,.22) 45%,rgba(0,0,0,.12)),var(--edge,linear-gradient(180deg,#6a4c84,#362049));box-shadow:0 18px 30px -12px rgba(32,22,40,.5),inset 0 0 0 1px rgba(255,255,255,.25)}
+html.hue-purple .float-docks .dock.right.closed{--edge:linear-gradient(180deg,#f6f4f7,#dbd6e0)}
+html.hue-purple .float-docks .dock.closed:hover{box-shadow:0 22px 36px -12px rgba(32,22,40,.55),inset 0 0 0 1px rgba(255,255,255,.4)}
+html.hue-purple .fold-ghost{box-shadow:0 24px 60px -18px rgba(32,22,40,.45)}
+html.hue-purple .theme-dark.float-docks .dock.right.closed{--edge:linear-gradient(180deg,#332a3a,#1c1621)}
+html.hue-purple .theme-dark.float-docks .dock.right.closed .vlabel, html.hue-purple .theme-dark.float-docks .dock.right.closed .dock-head > svg{color:#dad0e2}
+html.hue-purple .stack-docks .workspace > .dock, html.hue-purple .stack-docks .workspace > .dock.closed{box-shadow:0 18px 40px -20px rgba(32,22,40,.4)}
+html.hue-purple .stack-docks .workspace > .center{background:rgba(244,241,246,.9);box-shadow:0 30px 70px -24px rgba(32,22,40,.4),0 0 0 1px rgba(255,255,255,.4) inset}
+html.hue-purple .stack-docks .workspace:has(> .dock:not(.closed)) > .center{box-shadow:0 14px 34px -20px rgba(32,22,40,.35)}
 html.hue-graphite{--hover:#eeefef;--green:#52585c;--green-700:#3d4144;--green-50:#eeefef;--green-100:#dadddf;--green-grad:linear-gradient(135deg,#666e73 0%,#373c3f 100%)}
 html.hue-graphite .rail .railbtn{color:#e2e4e5}
 html.hue-graphite .dropzone{border:1.5px dashed #a6acb1}
@@ -1609,6 +1692,16 @@ html.hue-graphite .theme-dark .withfilters .fpanel{background:rgba(26,28,30,.66)
 html.hue-graphite .theme-dark .dock, html.hue-graphite .theme-dark .fpanel{--rip:rgba(122,131,137,.25);--rip-line:rgba(182,187,191,.7)}
 html.hue-graphite .theme-dark .topnav .util .avatar{background:#e7e8e9;color:#2a2d30}
 html.hue-graphite .theme-dark .docpreview .sheet{background:#ebeced}
+html.hue-graphite .float-docks .dock{box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 24px 60px -18px rgba(29,31,33,.45),0 8px 18px -10px rgba(29,31,33,.3)}
+html.hue-graphite .float-docks .workspace > .dock.closed{background:linear-gradient(90deg,rgba(0,0,0,.18),rgba(255,255,255,.22) 45%,rgba(0,0,0,.12)),var(--edge,linear-gradient(180deg,#62696e,#313538));box-shadow:0 18px 30px -12px rgba(29,31,33,.5),inset 0 0 0 1px rgba(255,255,255,.25)}
+html.hue-graphite .float-docks .dock.right.closed{--edge:linear-gradient(180deg,#f5f6f6,#d9dbdd)}
+html.hue-graphite .float-docks .dock.closed:hover{box-shadow:0 22px 36px -12px rgba(29,31,33,.55),inset 0 0 0 1px rgba(255,255,255,.4)}
+html.hue-graphite .fold-ghost{box-shadow:0 24px 60px -18px rgba(29,31,33,.45)}
+html.hue-graphite .theme-dark.float-docks .dock.right.closed{--edge:linear-gradient(180deg,#2f3235,#1a1c1d)}
+html.hue-graphite .theme-dark.float-docks .dock.right.closed .vlabel, html.hue-graphite .theme-dark.float-docks .dock.right.closed .dock-head > svg{color:#d7d9db}
+html.hue-graphite .stack-docks .workspace > .dock, html.hue-graphite .stack-docks .workspace > .dock.closed{box-shadow:0 18px 40px -20px rgba(29,31,33,.4)}
+html.hue-graphite .stack-docks .workspace > .center{background:rgba(243,244,244,.9);box-shadow:0 30px 70px -24px rgba(29,31,33,.4),0 0 0 1px rgba(255,255,255,.4) inset}
+html.hue-graphite .stack-docks .workspace:has(> .dock:not(.closed)) > .center{box-shadow:0 14px 34px -20px rgba(29,31,33,.35)}
 /* ==END-HUES== */
 /* ---------- Demo sign-in gate ---------- */
 #gate{position:fixed;inset:0;z-index:200;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(360px,1fr);background:var(--bg)}
