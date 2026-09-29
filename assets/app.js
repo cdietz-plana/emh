@@ -172,11 +172,12 @@ const FAXES = [
 /* ================= State ================= */
 const FKEYS = { caseStatus: ['Case status', CASE_STATUS], ar: ['Authorization', AR_STATUS], coverage: ['Coverage outcome', COVERAGE], pap: ['PAP status', PAP], prescriber: ['Prescriber', PRESCRIBERS.map(p => p[0])], facility: ['Facility', PRESCRIBERS.map(p => p[1])], payer: ['Payer', PAYERS], pharmacy: ['Pharmacy', PHARM], quick: ['Quick select', QUICK] };
 const S = {
-  dir: 'D', route: 'dashboard', caseId: CASES[0].id, tab: 'auth', q: '', f: Object.fromEntries(Object.keys(FKEYS).map(k => [k, new Set()])),
+  dir: 'H', route: 'dashboard', caseId: CASES[0].id, tab: 'auth', q: '', f: Object.fromEntries(Object.keys(FKEYS).map(k => [k, new Set()])),
   openMs: null, msq: '', menu: null, mega: null, navMini: false, navOpen: false, dockL: true, dockR: true, sel: CASES[0].id, side: true,
   strip: true, cols: { prescriber: window.innerWidth >= 1600, pap: false, rx: false, owner: true }, toast: null, modal: null, notesPanel: false, wl: 'today', qtab: 'All', expanded: {}, sort: { k: 'follow', d: 1 }
 };
-try { const d = localStorage.getItem('hp-dir3'); if (d && 'ABCDEFGH'.includes(d)) S.dir = d;  } catch (e) { }
+try { const d = localStorage.getItem('hp-dir4'); if (d && 'HDA'.includes(d)) S.dir = d;  } catch (e) { }
+if (S.dir === 'H') { S.dockL = false; S.dockR = false; }
 
 /* ================= Filtering ================= */
 function matches(c, skip) {
@@ -228,7 +229,7 @@ function chipsRow() {
 /* ================= Dashboard ================= */
 function worklistItems(list, n = 6) {
   if (!list.length) return `<div class="emptyline">Nothing here. You are caught up.</div>`;
-  const fu = c => c.follow ? (dayDiff(c.follow) < 0 ? `<span class="overdue">${-dayDiff(c.follow)} days overdue</span>` : dayDiff(c.follow) === 0 ? 'Due today' : fmt(c.follow)) : '<span class="muted">No date</span>';
+  const fu = c => c.follow ? (dayDiff(c.follow) < 0 ? `<span class="overdue">${-dayDiff(c.follow)} ${dayDiff(c.follow) === -1 ? 'day' : 'days'} overdue</span>` : dayDiff(c.follow) === 0 ? 'Due today' : fmt(c.follow)) : '<span class="muted">No date</span>';
   return `<div class="wi wi-h" aria-hidden="true"><span>Patient</span><span>Case status</span><span>Assigned to</span><span class="r">Follow-up</span></div>` + list.slice(0, n).map(c => `<div class="wi" data-a="case" data-id="${c.id}" tabindex="0" role="link">
     <span class="who"><span class="nm">${esc(fullName(c))}</span><span class="meta num">${c.id} · DOB ${fmt(c.dob)}</span></span>
     <span>${pill(c.caseStatus)}</span>
@@ -253,7 +254,7 @@ function viewDashboard() {
     <button class="kpi hot" data-a="wl" data-v="overdue"><span class="k">Overdue follow-ups</span><span class="v">${o.length}</span><span class="d">Oldest ${Math.max(...o.map(c => -dayDiff(c.follow)))} days</span></button>
     <button class="kpi" data-a="wl" data-v="missing"><span class="k">Missing follow-up date</span><span class="v">${m.length}</span><span class="d">Open cases with no date</span></button>
     <button class="kpi" data-a="drill" data-k="ar" data-v="Appeal in Progress"><span class="k">Appeals in progress</span><span class="v">${appeals}</span><span class="d">Up to 3 per request</span></button>
-    <button class="kpi" data-a="toast" data-v="Unattached Uploads is outside this prototype round"><span class="k">Unattached uploads</span><span class="v">2</span><span class="d">Waiting to be filed</span></button>
+    <button class="kpi" data-a="go" data-r="uploads"><span class="k">Unattached uploads</span><span class="v">2</span><span class="d">Waiting to be filed</span></button>
   </div>
   <div class="grid g-main">
     <section class="card worklist"><div class="card-h"><h2>My work</h2>
@@ -279,7 +280,7 @@ function casesTable(list, opts = {}) {
   const C = { ...S.cols }; if (opts.narrow) { C.prescriber = false; C.rx = false; C.pap = false; }
   const arrow = (k) => S.sort.k === k ? ic('chevd', 12).replace('<svg', `<svg style="transform:rotate(${S.sort.d > 0 ? 0 : 180}deg)"`) : '';
   const th = (k, l, w) => `<th style="width:${w}"><button data-a="sort" data-k="${k}">${l}${arrow(k)}</button></th>`;
-  const rows = list.slice(0, 25).map(c => `<tr class="click ${opts.sel === c.id ? 'sel' : ''}" data-a="${opts.rowAct || 'case'}" data-id="${c.id}">
+  const rows = pageSlice('cases', list).map(c => `<tr class="click ${opts.sel === c.id ? 'sel' : ''}" data-a="${opts.rowAct || 'case'}" data-id="${c.id}">
     <td class="pincell selcell"><input type="checkbox" data-a="csel" data-id="${c.id}" ${S.csel.has(c.id) ? 'checked' : ''} aria-label="Select ${esc(fullName(c))}"></td>
     <td class="pincell"><button class="star ${c.pinned ? 'on' : ''}" data-a="pin" data-id="${c.id}" aria-label="${c.pinned ? 'Unpin' : 'Pin'} case">${ic('star', 16).replace('fill="none"', c.pinned ? 'fill="currentColor"' : 'fill="none"')}</button></td>
     <td><a href="#" data-a="case" data-id="${c.id}" class="strong pname">${esc(fullName(c))}</a><span class="sub num">${c.id} · DOB ${fmt(c.dob)}</span></td>
@@ -290,14 +291,14 @@ function casesTable(list, opts = {}) {
     <td>${c.ar === 'None' ? '<span class="muted">None</span>' : pill(c.ar)}</td>
     ${C.pap ? `<td>${pill(c.pap)}</td>` : ''}${C.rx ? `<td><span class="num">Qty ${c.qty}</span><span class="sub">${esc(c.ship)}</span></td>` : ''}
     ${C.owner ? `<td>${c.owner === 'Unassigned' ? '<span class="overdue">Unassigned</span>' : esc(c.owner)}</td>` : ''}</tr>`).join('');
-  return `<div class="tablewrap"><table class="dt"><thead><tr><th class="pincell selcell"><input type="checkbox" data-a="cselall" aria-label="Select all on this page" ${list.slice(0, 25).length && list.slice(0, 25).every(c => S.csel.has(c.id)) ? 'checked' : ''}></th><th class="pincell" aria-label="Pinned"></th>${th('patient', 'Patient', 'auto')}${C.prescriber ? th('prescriber', 'Prescriber', 'auto') : ''}${th('follow', 'Follow-up', '128px')}${th('status', 'Case status', '220px')}<th style="width:150px">Coverage</th><th style="width:200px">Authorization</th>${C.pap ? '<th style="width:120px">PAP</th>' : ''}${C.rx ? '<th style="width:140px">Prescription</th>' : ''}${C.owner ? '<th style="width:140px">Assigned to</th>' : ''}</tr></thead>
+  return `<div class="tablewrap"><table class="dt"><thead><tr><th class="pincell selcell"><input type="checkbox" data-a="cselall" aria-label="Select all on this page" ${pageSlice('cases', list).length && pageSlice('cases', list).every(c => S.csel.has(c.id)) ? 'checked' : ''}></th><th class="pincell" aria-label="Pinned"></th>${th('patient', 'Patient', 'auto')}${C.prescriber ? th('prescriber', 'Prescriber', 'auto') : ''}${th('follow', 'Follow-up', '128px')}${th('status', 'Case status', '220px')}<th style="width:150px">Coverage</th><th style="width:200px">Authorization</th>${C.pap ? '<th style="width:120px">PAP</th>' : ''}${C.rx ? '<th style="width:140px">Prescription</th>' : ''}${C.owner ? '<th style="width:140px">Assigned to</th>' : ''}</tr></thead>
     <tbody>${rows || `<tr><td colspan="11" style="height:120px;text-align:center" class="muted">No cases match these filters. <button class="link-btn" data-a="clearall">Clear all filters</button></td></tr>`}</tbody></table></div>
-    <div class="pager num"><span>${list.length ? `1 to ${Math.min(25, list.length)} of ${list.length} cases` : '0 cases'}</span><span class="sp"></span><button class="btn sm ghost" disabled>${ic('chevl', 14)} Previous</button><span>Page 1 of ${Math.max(1, Math.ceil(list.length / 25))}</span><button class="btn sm ghost" ${list.length > 25 ? '' : 'disabled'}>Next ${ic('chevr', 14)}</button></div>`;
+    ${pagerX('cases', list.length, 'cases')}`;
 }
 const searchBox = (id = 'q', ph = 'Search case ID, patient, DOB, phone, prescriber') => `<label class="search" style="flex:1 1 280px;max-width:440px">${ic('search', 16)}<span class="sr">Search cases</span><input id="${id}" data-in="q" value="${esc(S.q)}" placeholder="${ph}" style="width:100%"></label>`;
 function viewCasesA() {
   const list = filtered();
-  return `<div class="page"><div class="pagehead"><h1>Cases</h1><span class="muted num">${list.length} of ${CASES.length}</span><button class="btn">${ic('download', 16)} Export</button><button class="btn primary" data-a="newcase">${ic('plus', 16)} New case</button></div>
+  return `<div class="page"><div class="pagehead"><h1>Cases</h1><span class="muted num">${list.length} of ${CASES.length}</span><button class="btn" data-a="exportcases">${ic('download', 16)} Export</button><button class="btn primary" data-a="newcase">${ic('plus', 16)} New case</button></div>
   <section class="card">
     <div class="card-b" style="display:flex;flex-direction:column;gap:10px">
       <div class="filterbar">${searchBox()}${['quick', 'caseStatus', 'ar', 'coverage', 'pap'].map(k => ms(k)).join('')}${['prescriber', 'facility', 'payer', 'pharmacy'].map(k => ms(k, 'r')).join('')}<span style="flex:1"></span>${colsMenu()}</div>
@@ -331,7 +332,7 @@ function quickView(c) {
 }
 function viewCasesB() {
   const list = filtered(); const sel = byId(S.sel) || list[0];
-  return `<div class="workspace">${filterDock()}<div class="center"><div class="page"><div class="pagehead"><h1>Cases</h1><span class="muted num">${list.length} of ${CASES.length}</span>${colsMenu()}<button class="btn">${ic('download', 16)} Export</button><button class="btn primary" data-a="newcase">${ic('plus', 16)} New case</button></div>
+  return `<div class="workspace">${filterDock()}<div class="center"><div class="page"><div class="pagehead"><h1>Cases</h1><span class="muted num">${list.length} of ${CASES.length}</span>${colsMenu()}<button class="btn" data-a="exportcases">${ic('download', 16)} Export</button><button class="btn primary" data-a="newcase">${ic('plus', 16)} New case</button></div>
    ${chipsRow()}
    <section class="card">${casesTable(list, { narrow: S.dockR && S.dockL, rowAct: 'sel', sel: sel && sel.id })}</section>
    <p class="muted" style="font-size:12.5px;margin:0">Select a row to preview it. Open the case with the case ID or the Open case button.</p></div></div>${quickView(sel)}</div>`;
@@ -346,7 +347,7 @@ function caseHeader(c) {
     <div class="who"><span class="ini">${c.first[0]}${c.last[0]}</span><div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="nm">${esc(c.last.toUpperCase())}, ${esc(c.first)}${c.mi ? ' ' + c.mi + '.' : ''}</span>${pill(c.consent === 'Consented' ? 'Consented' : c.consent)}</div>
       <div class="ids"><span>Case <span class="mono" style="color:var(--ink)">${c.id}</span>${copyBtn(c.id, 'case ID')}</span><span>Patient <span class="mono" style="color:var(--ink)">${c.pid}</span>${copyBtn(c.pid, 'patient ID')}</span><span class="num">DOB ${fmt(c.dob)}</span></div></div></div>
     <div class="acts"><button class="btn" data-a="pin" data-id="${c.id}">${ic('star', 16).replace('fill="none"', c.pinned ? 'fill="#d99400" stroke="#d99400"' : 'fill="none"')} ${c.pinned ? 'Pinned' : 'Pin'}</button><button class="btn danger" data-a="modal" data-v="ae">${ic('alert', 16)} Record AE</button>
-      <div style="position:relative"><button class="btn" data-a="menu" data-v="more" aria-label="More case actions">${ic('more', 16)}</button>${S.menu === 'more' ? `<div class="menu-pop" style="right:0;top:42px"><button data-a="modal" data-v="reassign" data-id="${c.id}">${ic('users', 16)} Reassign case</button><button data-a="toast" data-v="Case refreshed">${ic('refresh', 16)} Refresh case</button><hr><button data-a="toast" data-v="Close case opens here" style="color:var(--danger)">${ic('x', 16)} Close case</button></div>` : ''}</div></div>
+      <div style="position:relative"><button class="btn" data-a="menu" data-v="more" aria-label="More case actions">${ic('more', 16)}</button>${S.menu === 'more' ? `<div class="menu-pop" style="right:0;top:42px"><button data-a="modal" data-v="reassign" data-id="${c.id}">${ic('users', 16)} Reassign case</button><button data-a="refreshcase">${ic('refresh', 16)} Refresh case</button><hr><button data-a="modal" data-v="closecase2" style="color:var(--danger)">${ic('x', 16)} Close case</button></div>` : ''}</div></div>
   </div>
   <div class="statusstrip">
     <div class="sf" style="position:relative"><span class="lbl">Case status</span><button class="selpill ${TONE[c.caseStatus]}" data-a="menu" data-v="status">${esc(c.caseStatus)} ${ic('chevd', 14)}</button>${S.menu === 'status' ? `<div class="menu-pop" style="top:60px;left:12px;max-height:320px;overflow:auto">${CASE_STATUS.map(s => `<button data-a="setstatus" data-v="${esc(s)}"><span class="sw" style="background:${SW[TONE[s]]}"></span>${esc(s)}${s === c.caseStatus ? ` <span style="margin-left:auto">${ic('check', 14)}</span>` : ''}</button>`).join('')}</div>` : ''}</div>
@@ -397,7 +398,7 @@ function patientPanel(c, asDock) {
     <div class="dock-body kvp patientpane">${patientFields(c)}${team}</div></aside>`;
   return `<div class="sidecol ${S.sideAnim ? 'slide-in' : ''}"><section class="card"><div class="card-h"><h3>Patient</h3></div><div class="card-b kvp patientpane">${patientFields(c)}${team}</div></section></div>`;
 }
-function tabsBar() { const fc = findCounts(); return `<div class="tabs ${fc ? 'finding' : ''}" role="tablist">${TABS.map(([k, l, n]) => `<button role="tab" aria-selected="${S.tab === k}" data-a="tab" data-v="${k}" class="${fc && !fc[k] ? 'nohit' : ''}">${l}${fc ? (fc[k] ? ` <span class="n hitn num">${fc[k]}</span>` : '') : n ? ` <span class="n num">${n}</span>` : ''}</button>`).join('')}</div>`; }
+function tabsBar() { const fc = findCounts(); return `<div class="tabs ${fc ? 'finding' : ''}" role="tablist">${TABS.map(([k, l, n]) => ({ notes: NOTES, messages: MESSAGES, docs: DOCS, faxes: FAXES, audit: AUDIT }[k] || { length: n }).length).map((n, i) => [TABS[i][0], TABS[i][1], n]).map(([k, l, n]) => `<button role="tab" aria-selected="${S.tab === k}" data-a="tab" data-v="${k}" class="${fc && !fc[k] ? 'nohit' : ''}">${l}${fc ? (fc[k] ? ` <span class="n hitn num">${fc[k]}</span>` : '') : n ? ` <span class="n num">${n}</span>` : ''}</button>`).join('')}</div>`; }
 function tabPanel(c) {
   const f = { info: tabInfo, rx: tabRx, benefits: tabBenefits, auth: tabAuth, notes: tabNotes, messages: tabMessages, docs: tabDocs, faxes: tabFaxes, pap: tabPap, audit: tabAudit }[S.tab];
   return `<div>${tabsBar()}<div class="tabpanel" role="tabpanel">${f(c)}</div></div>`;
@@ -485,7 +486,7 @@ function viewCaseC(c) {
 function viewQueue() {
   const tabs = { All: () => true, Mine: c => c.owner === ME, 'Due today': c => c.follow && dayDiff(c.follow) === 0, Overdue: c => c.follow && dayDiff(c.follow) < 0, Appeals: c => c.ar === 'Appeal in Progress' };
   const list = filtered().filter(tabs[S.qtab]);
-  return `<section class="queue" aria-label="Case queue"><div class="queue-head"><div style="display:flex;align-items:center;gap:8px"><h2 style="margin-right:auto">Cases</h2><span class="muted num" style="font-size:12.5px">${list.length}</span><button class="iconbtn" data-a="toast" data-v="New case intake opens here" aria-label="New case">${ic('plus', 18)}</button></div>
+  return `<section class="queue" aria-label="Case queue"><div class="queue-head"><div style="display:flex;align-items:center;gap:8px"><h2 style="margin-right:auto">Cases</h2><span class="muted num" style="font-size:12.5px">${list.length}</span><button class="iconbtn" data-a="newcase" aria-label="New case">${ic('plus', 18)}</button></div>
     ${searchBox('q3', 'Search cases').replace('max-width:440px', 'max-width:none;flex:none')}
     <div class="qtabs">${Object.keys(tabs).map(k => `<button data-a="qtab" data-v="${k}" aria-pressed="${S.qtab === k}">${k}</button>`).join('')}</div>
     <div class="filterbar">${['caseStatus', 'ar', 'coverage'].map(k => ms(k)).join('')}${ms('payer', 'r')}</div>${chipsRow()}</div>
@@ -613,7 +614,7 @@ function listPage(pid, cfg) {
   const rows = applyPF(pid, cfg.filters, cfg.rows, cfg.text);
   const n = pfCount(pid);
   const head = `<div class="pagehead"><div><h1>${cfg.title}</h1>${cfg.sub ? `<div class="muted" style="font-size:13px">${cfg.sub}</div>` : ''}</div>${cfg.head || ''}</div>`;
-  const tableCard = `<section class="card"><div class="card-h" style="flex-wrap:wrap;gap:10px 12px">${tableSearch(pid, cfg.searchPh)}<span class="muted num" style="font-size:13px;margin-left:auto">${rows.length} of ${cfg.rows.length} ${cfg.noun}</span>${cfg.tools || ''}</div>${dtable(cfg.cols, rows, cfg.opts || {})}${pager(rows.length, cfg.noun)}</section>`;
+  const tableCard = `<section class="card"><div class="card-h" style="flex-wrap:wrap;gap:10px 12px">${tableSearch(pid, cfg.searchPh)}<span class="muted num" style="font-size:13px;margin-left:auto">${rows.length} of ${cfg.rows.length} ${cfg.noun}</span>${cfg.tools || ''}</div>${dtable(cfg.cols, pageSlice(pid, rows), cfg.opts || {})}${pagerX(pid, rows.length, cfg.noun)}</section>`;
   if (isTop()) {
     return `<div class="workspace"><aside class="dock ${S.dockL ? '' : 'closed'}" aria-label="Filters"><div class="dock-head">${ic('filter', 16)}<h3>Filters ${n ? `<span class="pill nodot t-ok num" style="height:20px">${n}</span>` : ''}</h3>${n ? `<button class="link-btn x" data-a="pfclear" data-p="${pid}">Clear</button>` : ''}<button class="iconbtn" data-a="dockL" aria-label="Toggle filters">${ic(S.dockL ? 'chevl' : 'chevr', 16)}</button><span class="vlabel">Filters${n ? ` (${n})` : ''}</span></div><div class="dock-body">${filterGroups(pid, cfg.filters, cfg.rows)}</div></aside>
       <div class="center"><div class="page">${head}${pfChips(pid, cfg.filters)}${tableCard}</div></div></div>`;
@@ -675,7 +676,7 @@ const FX_F = [{ key: 'status', label: 'Status', get: r => r.status, opts: ['Fail
 function viewFax() {
   return listPage('fax', {
     title: 'Fax Transmissions', sub: 'Every fax sent or received through the hub', noun: 'faxes', filters: FX_F, rows: FAXLOG, searchPh: 'Search job number, recipient, fax number',
-    head: `<button class="btn primary" data-a="toast" data-v="Send fax opens here">${ic('fax', 16)} Send fax</button>`,
+    head: `<button class="btn primary" data-a="modal" data-v="sendfax">${ic('fax', 16)} Send fax</button>`,
     text: r => [r.job, r.who, r.num, r.caseId].join(' '),
     cols: [
       ['Date', '100px', r => `<span class="num">${fmt(r.date)}</span><span class="sub num">${fmtT(r.date)}</span>`],
@@ -711,7 +712,7 @@ function viewPatient() {
   const cases = p.cases.map(byId);
   return `<div class="page"><div class="crumbs"><a href="#" data-a="go" data-r="patients">Patients</a>${ic('chevr', 12)}<span>${esc(fullName(c))}</span></div>
   <section class="card"><div class="casehead"><div class="who"><span class="ini">${c.first[0]}${c.last[0]}</span><div><div style="display:flex;gap:10px;align-items:center"><span class="nm">${esc(c.last.toUpperCase())}, ${esc(c.first)} ${c.mi}.</span>${pill(c.consent)}</div><div class="ids"><span>Patient <span class="mono" style="color:var(--ink)">${p.pid}</span>${copyBtn(p.pid, 'patient ID')}</span><span class="num">DOB ${fmt(c.dob)}</span><span>${p.status}</span></div></div></div>
-  <div class="acts"><button class="btn" data-a="toast" data-v="Edit patient opens in a side panel">${ic('edit', 16)} Edit patient</button><button class="btn primary" data-a="newcasefor" data-id="${p.pid}">${ic('plus', 16)} New case</button></div></div></section>
+  <div class="acts"><button class="btn" data-a="edit" data-v="patient">${ic('edit', 16)} Edit patient</button><button class="btn primary" data-a="newcasefor" data-id="${p.pid}">${ic('plus', 16)} New case</button></div></div></section>
   <div class="caselayout"><div class="stack">
     <section class="card"><div class="card-h"><h2>Cases</h2><span class="muted num" style="font-size:13px">${cases.length}</span></div>${dtable([
       ['Case', '130px', x => `<a href="#" data-a="case" data-id="${x.id}" class="strong">${x.id}</a><span class="sub num">Opened ${fmt(x.start)}</span>`],
@@ -728,7 +729,7 @@ function orgList(pid, title, rows, detailAct, noun) {
   const F = [{ key: 'status', label: 'Status', get: r => r.status, opts: ['Active', 'Inactive'] }, { key: 'type', label: 'Type', get: r => r.type }];
   return listPage(pid, {
     title, noun, filters: F, rows, searchPh: 'Search name, city, phone, fax',
-    head: `<button class="btn primary" data-a="toast" data-v="Create ${noun.slice(0, -1)} opens in a modal">${ic('plus', 16)} Add ${noun.slice(0, -1)}</button>`,
+    head: `<button class="btn primary" data-a="orgnew" data-v="${pid}">${ic('plus', 16)} Add ${noun.slice(0, -1)}</button>`,
     text: r => [r.name, r.city, r.phone, r.fax].join(' '),
     cols: [
       ['Name', 'auto', r => `<a href="#" data-a="${detailAct}" data-id="${r.id}" class="strong pname">${esc(r.name)}</a><span class="sub">${esc(r.type)}</span>`],
@@ -745,7 +746,7 @@ function orgDetail(o, back, backLabel) {
   const shown = cases.filter(c => f === 'All' || (f === 'Open' ? !['Closed', 'Complete'].includes(c.caseStatus) : ['Closed', 'Complete'].includes(c.caseStatus)));
   return `<div class="page"><div class="crumbs"><a href="#" data-a="go" data-r="${back}">${backLabel}</a>${ic('chevr', 12)}<span>${esc(o.name)}</span></div>
   <section class="card"><div class="casehead"><div class="who"><span class="ini" style="border-radius:10px">${ic('card', 20)}</span><div><div class="nm">${esc(o.name)}</div><div class="ids"><span>${esc(o.type)}</span><span>${o.status}</span></div></div></div>
-  <div class="acts"><button class="btn" data-a="toast" data-v="Edit opens in a side panel">${ic('edit', 16)} Edit</button><button class="btn danger" data-a="toast" data-v="Deactivate asks for confirmation first">Deactivate</button></div></div></section>
+  <div class="acts"><button class="btn" data-a="edit" data-v="org">${ic('edit', 16)} Edit</button><button class="btn ${o.status === 'Inactive' ? '' : 'danger'}" data-a="modal" data-v="deact" data-id="org:${o.id}">${o.status === 'Inactive' ? 'Reactivate' : 'Deactivate'}</button></div></div></section>
   <div class="caselayout"><section class="card"><div class="card-h"><h2>Cases with this ${back === 'pbms' ? 'PBM' : 'carrier'}</h2><div class="seg lite">${['Open', 'Closed', 'All'].map(k => `<button data-a="cstat" data-v="${k}" aria-pressed="${f === k}">${k}</button>`).join('')}</div></div>
     ${dtable([
       ['Patient', 'auto', c => `<a href="#" data-a="case" data-id="${c.id}" class="strong pname">${esc(fullName(c))}</a><span class="sub num">${c.id} · DOB ${fmt(c.dob)}</span>`],
@@ -760,7 +761,7 @@ function viewFacilities() {
   const F = [{ key: 'type', label: 'Facility type', get: r => r.type }, { key: 'pin', label: 'Pinned', get: r => r.pinned ? 'Pinned' : 'Not pinned', opts: ['Pinned', 'Not pinned'] }];
   return listPage('facilities', {
     title: 'Medical Facilities', noun: 'facilities', filters: F, rows: FACILITIES, searchPh: 'Search name, NPI, phone, fax',
-    head: `<button class="btn primary" data-a="toast" data-v="Create facility opens in a modal">${ic('plus', 16)} Add facility</button>`,
+    head: `<button class="btn primary" data-a="modal" data-v="facnew">${ic('plus', 16)} Add facility</button>`,
     text: r => [r.name, r.npi, r.phone, r.fax].join(' '),
     cols: [
       ['', '44px', r => `<button class="star ${r.pinned ? 'on' : ''}" data-a="facpin" data-id="${r.id}" aria-label="Pin">${ic('star', 16).replace('fill="none"', r.pinned ? 'fill="currentColor"' : 'fill="none"')}</button>`, 'pincell'],
@@ -772,22 +773,22 @@ function viewFacilities() {
 }
 function viewFacility() {
   const f = FACILITIES.find(x => x.id === S.detail.facility) || FACILITIES[0];
-  const tab = S.tab2.facility || 'notes';
+  const tab = S.tab2.facility || 'users';
   const cases = CASES.filter(c => c.facility === f.name);
-  const tabs = [['notes', 'Notes', f.notes.length], ['users', 'Prescribers and users', f.users.length], ['locs', 'Locations', f.locs.length], ['cases', 'Cases', cases.length], ['docs', 'Documents', f.docs.length]];
+  const tabs = [['users', 'Prescribers and users', f.users.length], ['locs', 'Locations', f.locs.length], ['notes', 'Notes', f.notes.length], ['docs', 'Documents', f.docs.length], ['cases', 'Cases', cases.length]];
   let body = '';
   if (tab === 'notes') body = `<div class="tp-h"><h2>Notes</h2><button class="btn primary" data-a="modal" data-v="note">${ic('plus', 16)} Add note</button></div>
-    <div class="notes">${f.notes.map((nt, i) => `<div class="noterow ${nt.hl ? 'hl' : ''}"><div><div class="hd"><b>${esc(nt.by)}</b><span class="muted num">${nt.when}</span>${nt.hl ? '<span class="pill nodot t-warn">Highlighted</span>' : ''}</div><p>${esc(nt.text)}</p></div>
+    <div class="notes">${f.notes.map((nt, i) => `<div class="noterow ${nt.hl ? 'hl' : ''}"><div><div class="hd"><b>${esc(nt.by)}</b><span class="muted num">${nt.when}</span>${nt.hl ? '<span class="pill nodot t-warn">Highlighted</span>' : ''}</div><p><span class="${nt.hl ? 'hltext' : ''}">${esc(nt.text)}</span></p></div>
       <div class="noteacts"><button class="btn sm ghost" data-a="modal" data-v="note" data-id="${i}">${ic('edit', 14)} Edit</button><button class="btn sm ghost" data-a="notehl" data-id="${i}">${ic('flag', 14)} ${nt.hl ? 'Unhighlight' : 'Highlight'}</button><button class="btn sm ghost danger-t" data-a="noterm" data-id="${i}">${ic('x', 14)} Remove</button></div></div>`).join('') || '<div class="emptyline">No notes yet.</div>'}</div>`;
-  if (tab === 'users') body = `<div class="tp-h"><h2>Prescribers and users</h2><button class="btn primary" data-a="toast" data-v="Add user opens in a modal">${ic('plus', 16)} Add user</button></div>${dtable([['Name', 'auto', u => `<span class="strong">${esc(u.name)}</span><span class="sub">${esc(u.email)}</span>`], ['Role', '160px', u => u.role], ['Status', '150px', u => pill(u.status === 'Active' ? 'Active' : 'Pending').replace('>Pending<', '>Invite pending<')], ['', '120px', u => splitAct('u' + u.email), 'r']], f.users)}`;
-  if (tab === 'locs') body = `<div class="tp-h"><h2>Locations</h2><button class="btn primary" data-a="toast" data-v="Add location opens in a modal">${ic('plus', 16)} Add location</button></div>${dtable([['Location', 'auto', l => `<span class="strong">${esc(l.name)}</span>${pinAddr(l.st, l.city).replace('class="addr"', 'class="addr sub-addr"')}`], ['Phone', '150px', l => `<span class="num">${l.phone}</span>`], ['Fax', '150px', l => l.fax ? `<span class="num">${l.fax}</span>` : '<span class="muted">None</span>'], ['NPI', '130px', l => `<span class="num">${l.npi}</span>`]], f.locs)}`;
+  if (tab === 'users') body = `<div class="tp-h"><h2>Prescribers and users</h2><button class="btn primary" data-a="modal" data-v="usernew" data-id="fac">${ic('plus', 16)} Add user</button></div>${dtable([['Name', 'auto', u => `<span class="strong">${esc(u.name)}</span><span class="sub">${esc(u.email)}</span>`], ['Role', '160px', u => u.role], ['Status', '150px', u => pill(u.status === 'Active' ? 'Active' : 'Pending').replace('>Pending<', '>Invite pending<')], ['', '120px', u => splitAct('u' + u.email), 'r']], f.users)}`;
+  if (tab === 'locs') body = `<div class="tp-h"><h2>Locations</h2><button class="btn primary" data-a="modal" data-v="locnew">${ic('plus', 16)} Add location</button></div>${dtable([['Location', 'auto', l => `<span class="strong">${esc(l.name)}</span>${pinAddr(l.st, l.city).replace('class="addr"', 'class="addr sub-addr"')}`], ['Phone', '150px', l => `<span class="num">${l.phone}</span>`], ['Fax', '150px', l => l.fax ? `<span class="num">${l.fax}</span>` : '<span class="muted">None</span>'], ['NPI', '130px', l => `<span class="num">${l.npi}</span>`]], f.locs)}`;
   if (tab === 'cases') body = `<div class="tp-h"><h2>Cases</h2></div>${dtable([['Patient', 'auto', c => `<a href="#" data-a="case" data-id="${c.id}" class="strong pname">${esc(fullName(c))}</a><span class="sub num">${c.id}</span>`], ['Prescriber', '200px', c => esc(c.prescriber)], ['Case status', '220px', c => pill(c.caseStatus)], ['Follow-up', '130px', c => followCell(c)]], cases, { rowAct: c => `data-a="case" data-id="${c.id}"` })}`;
-  if (tab === 'docs') body = `<div class="tp-h"><h2>Documents</h2><button class="btn primary" data-a="toast" data-v="Add document opens in a modal">${ic('plus', 16)} Add document</button></div>${dtable([['Name', 'auto', d => `<div class="doccell">${ic('file', 16)}<a href="#" data-a="toast" data-v="Document preview opens here">${d[0]}</a></div>`], ['Type', '160px', d => d[1]], ['Added', '130px', d => `<span class="num">${d[2]}</span>`]], f.docs)}`;
+  if (tab === 'docs') body = `<div class="tp-h"><h2>Documents</h2><button class="btn primary" data-a="modal" data-v="adddoc" data-id="fac">${ic('plus', 16)} Add document</button></div>${dtable([['Name', 'auto', d => `<div class="doccell">${ic('file', 16)}${docLink(d[0], { type: d[1], date: d[2] })}</div>`], ['Type', '160px', d => d[1]], ['Added', '130px', d => `<span class="num">${d[2]}</span>`]], f.docs)}`;
   return `<div class="page"><div class="crumbs"><a href="#" data-a="go" data-r="facilities">Medical Facilities</a>${ic('chevr', 12)}<span>${esc(f.name)}</span></div>
   <section class="card"><div class="casehead"><div class="who"><span class="ini" style="border-radius:10px">${ic('building', 20)}</span><div><div class="nm">${esc(f.name)}</div><div class="ids"><span>${esc(f.type)}</span><span>NPI ${f.npi}</span><span>${f.status}</span></div></div></div>
-  <div class="acts"><button class="btn" data-a="facpin" data-id="${f.id}">${ic('star', 16).replace('fill="none"', f.pinned ? 'fill="#d99400" stroke="#d99400"' : 'fill="none"')} ${f.pinned ? 'Pinned' : 'Pin'}</button><button class="btn" data-a="toast" data-v="Edit facility opens in a side panel">${ic('edit', 16)} Edit</button><button class="btn danger" data-a="toast" data-v="Deactivate asks for confirmation first">Deactivate</button></div></div></section>
-  <div class="caselayout"><div><div class="tabs" role="tablist">${tabs.map(([k, l, n]) => `<button role="tab" aria-selected="${tab === k}" data-a="tab2" data-k="facility" data-v="${k}">${l} <span class="n num">${n}</span></button>`).join('')}</div><div class="tabpanel">${body}</div></div>
-  <div class="sidecol"><section class="card"><div class="card-h"><h3>Facility details</h3></div><div class="card-b kvp"><div class="fields">${fld('Type', f.type, false)}${fld('Primary contact', f.contact, false)}${fld('Phone', f.phone)}${fld('Fax', f.fax)}${fld('NPI', f.npi)}${fld('Tax ID', f.tax)}</div><div class="kv-sub">Main location</div><div class="fields">${fld('Address', `${f.locs[0].st}, ${f.locs[0].city}`)}</div></div></section></div></div></div>`;
+  <div class="acts"><button class="btn" data-a="facpin" data-id="${f.id}">${ic('star', 16).replace('fill="none"', f.pinned ? 'fill="#d99400" stroke="#d99400"' : 'fill="none"')} ${f.pinned ? 'Pinned' : 'Pin'}</button><button class="btn" data-a="edit" data-v="facility">${ic('edit', 16)} Edit</button><button class="btn ${f.status === 'Inactive' ? '' : 'danger'}" data-a="modal" data-v="deact" data-id="fac:${f.id}">${f.status === 'Inactive' ? 'Reactivate' : 'Deactivate'}</button></div></div></section>
+  <div class="caselayout side-left"><div class="sidecol"><section class="card"><div class="card-h"><h3>Facility details</h3></div><div class="card-b kvp"><div class="fields">${fld('Type', f.type, false)}${fld('Primary contact', f.contact, false)}${fld('Phone', f.phone)}${fld('Fax', f.fax)}${fld('NPI', f.npi)}${fld('Tax ID', f.tax)}</div><div class="kv-sub">Main location</div><div class="fields">${fld('Address', `${f.locs[0].st}, ${f.locs[0].city}`)}</div></div></section></div><div><div class="tabs" role="tablist">${tabs.map(([k, l, n]) => `<button role="tab" aria-selected="${tab === k}" data-a="tab2" data-k="facility" data-v="${k}">${l} <span class="n num">${n}</span></button>`).join('')}</div><div class="tabpanel">${body}</div></div>
+  </div></div>`;
 }
 function viewLocations() {
   const F = [{ key: 'fac', label: 'Facility', get: r => r.fac.name }, { key: 'state', label: 'State', get: r => r.city.split(', ')[1].split(' ')[0] }, { key: 'fax', label: 'Fax on file', get: r => r.fax ? 'Has fax' : 'Missing fax', opts: ['Has fax', 'Missing fax'] }];
@@ -814,7 +815,7 @@ function viewBoard(kind) {
       ['Facility', 'auto', x => `<a href="#" data-a="facility" data-id="${x.id}" class="strong pname">${esc(x.name)}</a><span class="sub">Last provider login ${x.login || 'never'} · Last notified ${x.notified || 'never'}</span>`],
       ['Patients expiring', '150px', x => `<span class="countpill num">${x.list.length}</span>`, 'r'],
       ['Soonest', '130px', x => { const d = Math.min(...x.list.map(e => dayDiff(e.exp))); return `<span class="num ${d <= 14 ? 'overdue' : ''}">${d} days</span>`; }],
-      ['', '260px', x => `<div class="rowacts"><button class="btn sm" data-a="toast" data-v="Printable list opens here">Print list</button><button class="btn sm primary" data-a="modal" data-v="notify" data-id="${esc(x.name)}">${ic('mail', 14)} Email facility</button></div>`, 'r']
+      ['', '260px', x => `<div class="rowacts"><button class="btn sm" data-a="printlist" data-k="${kind}" data-v="${esc(x.name)}">Print list</button><button class="btn sm primary" data-a="modal" data-v="notify" data-id="${esc(x.name)}">${ic('mail', 14)} Email facility</button></div>`, 'r']
     ], byFac);
     return `<div class="page"><div class="pagehead"><div><h1>Expiring ${kind === 'Authorization' ? 'Authorizations' : 'Benefits'}</h1><div class="muted" style="font-size:13px">Grouped by prescribing facility</div></div>${tabsHtml}</div><section class="card">${t}</section></div>`;
   }
@@ -862,7 +863,7 @@ function drawer() {
     const f = FAXLOG.find(x => x.id === d.id); title = `${f.dir} fax · ${f.who}`;
     body = `<div style="display:flex;gap:8px;align-items:center">${fxPill(f.status)}${f.error ? `<span class="overdue" style="font-size:13px">${esc(f.error)}</span>` : ''}</div>
       <div class="fields">${fld('Date', `${fmt(f.date)} ${fmtT(f.date)}`, false)}${fld(f.dir === 'Inbound' ? 'From' : 'To', `${f.who} (${f.kind})`, false)}${fld('Fax number', f.num)}${fld('Type', f.type, false)}${fld('Job number', f.job || 'Not assigned yet')}${fld('Pages', String(f.pages), false)}${fld('Case', `${fullName(byId(f.caseId))} · ${f.caseId}`, false)}</div>
-      <div class="kv-sub">Files</div><div class="fields">${['Fax_cover_sheet.pdf', f.type === 'PA form' ? 'PA_form_signed.pdf' : f.type === 'Appeal packet' ? 'Appeal_packet.pdf' : 'Case_summary.pdf'].map(x => `<div class="fld"><span class="lbl">File</span><span class="val"><a href="#" data-a="toast" data-v="Document preview opens here">${x}</a></span><span></span></div>`).join('')}</div>`;
+      <div class="kv-sub">Files</div><div class="fields">${['Fax_cover_sheet.pdf', f.type === 'PA form' ? 'PA_form_signed.pdf' : f.type === 'Appeal packet' ? 'Appeal_packet.pdf' : 'Case_summary.pdf'].map(x => `<div class="fld"><span class="lbl">File</span><span class="val">${docLink(x, { type: 'Fax', date: fmt(f.date) })}</span><span></span></div>`).join('')}</div>`;
     foot = `<button class="btn" data-a="case" data-id="${f.caseId}">Open case</button><span style="flex:1"></span>${f.status === 'Failed' ? `<button class="btn primary" data-a="faxretry" data-id="${f.id}">${ic('refresh', 16)} Retry fax</button>` : f.status === 'Staged' ? `<button class="btn primary" data-a="faxretry" data-id="${f.id}">${ic('send', 16)} Send now</button>` : `<button class="btn" data-a="drawerclose">Close</button>`}`;
   }
   const enter = LAST_DRAWER !== d.type + d.id && !LAST_DRAWER;
@@ -1261,7 +1262,7 @@ extraModal = function (m, wrap) {
   if (m.type === 'policy') { const p = m.id != null ? S.ik.policies[+m.id] : {}; const e = m.err || {};
     const pf = (k, l, o = {}) => `<div class="input ${e[k] ? 'err' : ''}" style="${o.half ? '' : ''}"><label class="lbl" for="pol-${k}">${l}${o.req ? ' <span class="req">*</span>' : ''}</label>${o.opts ? `<select id="pol-${k}"><option value="">Select</option>${o.opts.map(x => `<option ${p[k] === x ? 'selected' : ''}>${x}</option>`).join('')}</select>` : `<input id="pol-${k}" value="${esc(p[k] || '')}" placeholder="${o.ph || ''}">`}${e[k] ? `<span class="ikerr">${ic('info', 13)} ${l} is required</span>` : ''}</div>`;
     return wrap(m.id != null ? 'Edit policy' : `Add ${['primary', 'secondary', 'tertiary'][S.ik.policies.length]} policy`, `<div class="polgrid">${pf('carrier', 'Carrier', { req: 1, opts: [...CARRIERS.map(c => c.name), ...PBMS.map(c => c.name)] })}${pf('type', 'Type of insurance', { opts: ['Commercial', 'Medicare', 'Medicaid', 'PBM', 'Other'] })}${pf('policy', 'Policy ID', { req: 1 })}${pf('group', 'Group number')}${pf('rel', "Patient's relationship to cardholder", { req: 1, opts: ['Self', 'Spouse', 'Child', 'Other'] })}${pf('holder', 'Cardholder name', { ph: 'If not the patient' })}${pf('bin', 'Rx BIN')}${pf('pcn', 'Rx PCN')}</div>
-      <button class="link-btn" data-a="toast" data-v="Add carrier opens in Organizations">Carrier not listed? Add a carrier</button>`, `<button class="btn" data-a="mclose">Cancel</button><button class="btn primary" data-a="polsave" data-id="${m.id ?? ''}">Save policy</button>`); }
+      <button class="link-btn" data-a="orgnew" data-v="carriers">Carrier not listed? Add a carrier</button>`, `<button class="btn" data-a="mclose">Cancel</button><button class="btn primary" data-a="polsave" data-id="${m.id ?? ''}">Save policy</button>`); }
   return _xm0(m, wrap);
 };
 
@@ -1327,7 +1328,7 @@ Object.assign(EXTRA, {
   newcase() { S.ik = ikNew(); S.route = 'intake'; S.mega = null; window.scrollTo(0, 0); },
   newcasefor(t) { const p = patientOf(t.dataset.id); S.ik = ikNew(p.c); S.ik.choice = p.pid; S.ik.pid = p.pid; S.route = 'intake'; window.scrollTo(0, 0); }
 });
-function bulkBar() { if (!S.csel.size || !['cases'].includes(S.route)) return ''; return `<div class="bulkbar" role="region" aria-label="Bulk actions"><b class="num">${S.csel.size} selected</b><button class="btn sm primary" data-a="modal" data-v="reassign">${ic('users', 14)} Reassign</button><button class="btn sm" data-a="toast" data-v="Bulk follow-up date opens here">${ic('cal', 14)} Set follow-up</button><button class="btn sm ghost" data-a="cselclear">Clear</button></div>`; }
+function bulkBar() { if (!S.csel.size || !['cases'].includes(S.route)) return ''; return `<div class="bulkbar" role="region" aria-label="Bulk actions"><b class="num">${S.csel.size} selected</b><button class="btn sm primary" data-a="modal" data-v="reassign">${ic('users', 14)} Reassign</button><button class="btn sm" data-a="modal" data-v="bulkfu">${ic('cal', 14)} Set follow-up</button><button class="btn sm ghost" data-a="cselclear">Clear</button></div>`; }
 
 /* ---------- Index-card step transitions ---------- */
 let IK_MOVE = null;
@@ -1442,7 +1443,7 @@ function roundCard(c, r, rd, isCur, stopped) {
   const key = r.id + rd.kind + (rd.n || 0);
   const collapsed = !isCur && !S.expanded[key];
   const status = rd.outcome ? pill(rd.outcome) : stopped ? pill('Cancelled') : pill('Pending', 'nodot').replace('Pending', `Step ${Math.min(rd.stage + 1, steps.length)} of ${steps.length}`);
-  return `<div class="arcard ${collapsed ? 'collapsed' : ''} ${isCur ? 'live' : ''}"><div class="ar-h"><h3>${title}</h3>${status}${rd.reason ? `<span class="muted" style="font-size:13px">${esc(rd.reason)}</span>` : ''}<span class="sp"></span>${!isCur ? `<button class="btn sm ghost" data-a="arx" data-v="${key}">${collapsed ? 'Show steps' : 'Hide steps'} ${ic('chevd', 14)}</button>` : ''}</div>${arStepper(rd, stopped)}${isCur ? arAction(c, r, rd) : ''}${!isCur && rd.file ? `<div style="padding:0 16px 14px;font-size:13px">${ic('file', 14)} <a href="#" data-a="toast" data-v="Document preview opens here">${esc(rd.file)}</a></div>` : ''}</div>`;
+  return `<div class="arcard ${collapsed ? 'collapsed' : ''} ${isCur ? 'live' : ''}"><div class="ar-h"><h3>${title}</h3>${status}${rd.reason ? `<span class="muted" style="font-size:13px">${esc(rd.reason)}</span>` : ''}<span class="sp"></span>${!isCur ? `<button class="btn sm ghost" data-a="arx" data-v="${key}">${collapsed ? 'Show steps' : 'Hide steps'} ${ic('chevd', 14)}</button>` : ''}</div>${arStepper(rd, stopped)}${isCur ? arAction(c, r, rd) : ''}${!isCur && rd.file ? `<div style="padding:0 16px 14px;font-size:13px">${ic('file', 14)} ${docLink(rd.file, { type: rd.kind === 'pa' ? 'Prior authorization' : 'Appeal', pages: rd.kind === 'pa' ? 3 : 6 })}</div>` : ''}</div>`;
 }
 function arAction(c, r, rd) {
   const payer = r.payer;
@@ -1602,7 +1603,7 @@ function stackAnimate(pre) {
     const body = d.querySelector('.dock-body'), head = [...d.querySelectorAll('.dock-head > :not(svg):not(.vlabel)')], lab = d.querySelector('.vlabel');
     const shift = d.classList.contains('right') ? 24 : -24;
     if (closed) {
-      [body, ...head].forEach(el => el && el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 240, easing: 'ease-in' }));
+      [body, ...head].forEach(el => el && el.animate([{ opacity: 1, visibility: 'visible' }, { opacity: 0, visibility: 'visible' }], { duration: 240, easing: 'ease-in' }));
       if (lab) lab.animate([{ opacity: 0, transform: 'rotate(180deg) translateY(10px)' }, { opacity: 1, transform: 'rotate(180deg)' }], { duration: 360, delay: 320, easing: EASE, fill: 'backwards' });
     } else {
       if (lab) lab.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: 'ease-in' });
@@ -1662,15 +1663,798 @@ function acctMenu() {
   const open = S.menu === 'acct';
   return `<div class="acctwrap"><button class="avatarbtn" data-a="menu" data-v="acct" aria-expanded="${open}" aria-label="Account menu"><span class="avatar">JM</span></button>${open ? `<div class="menu-pop acctmenu" role="menu">
     <div class="acct-h"><span class="avatar">JM</span><div><b>Janet Mills</b><span>Case manager</span></div></div><hr>
-    <button data-a="toast" data-v="Settings are coming soon" class="dim">${ic('gear', 16)} Settings <span class="soon">Coming soon</span></button>
+    <button data-a="settings">${ic('gear', 16)} Settings</button>
+    <div class="acct-sub">${ic('sidebar', 16)} Layout</div>
+    <div class="dirlist">${[['H', 'A'], ['D', 'B'], ['A', 'C']].map(([k, shown]) => `<button data-a="dir" data-v="${k}" aria-pressed="${S.dir === k}" title="${esc(DIRS[k][1])}"><span class="dl-k">${shown}</span>${DIRS[k][0]}${S.dir === k ? ic('check', 14) : ''}</button>`).join('')}</div>
+    <div class="acct-sub">${ic('dash', 16)} Dashboard</div>
+    <div class="dirlist">${DASHES.map(([k, l, d], i) => `<button data-a="dashset" data-v="${k}" aria-pressed="${S.dash === k}" title="${esc(d)}"><span class="dl-k">${i + 1}</span>${l}${S.dash === k ? ic('check', 14) : ''}</button>`).join('')}</div>
     <div class="acct-sub">${ic('grid', 16)} Theme</div>
     <div class="swatches">${HUES.map(([k, l, c]) => `<button class="swatch ${S.hue === k ? 'on' : ''}" data-a="hue" data-v="${k}" aria-pressed="${S.hue === k}" title="${l}"><i style="background:linear-gradient(135deg,${c},color-mix(in srgb,${c} 55%,#000))"></i><span>${l}</span></button>`).join('')}</div><hr>
+    <button data-a="notes" aria-pressed="${S.notesPanel}">${ic('check', 16)} ${S.notesPanel ? 'Hide' : 'Show'} feedback addressed</button><hr>
     <button data-a="signout">${ic('arrowr', 16)} Sign out</button></div>` : ''}</div>`;
 }
 Object.assign(EXTRA, {
   hue(t) { S.hue = t.dataset.v; try { localStorage.setItem('hp-hue', S.hue); } catch (e) { } applyHue(); S.menu = 'acct'; },
   signout() { S.menu = null; try { sessionStorage.removeItem('hp-demo-unlocked'); } catch (e) { } if (document.getElementById('gate')) { location.reload(); return; } toast('Signed out. The hosted demo returns to the sign-in screen'); }
 });
+/* ================= Round 5: every stub built out ================= */
+const ROUTES_X = {};
+const uid = (p) => p + Math.floor(1000 + Math.random() * 9000);
+const nowStamp = () => `${fmt(TODAY)} ${fmtT(new Date())}`;
+const val = (id) => { const el = document.getElementById(id); return el ? (el.type === 'checkbox' ? el.checked : el.value.trim()) : ''; };
+const auditLog = (area, action, detail) => AUDIT.unshift([nowStamp(), ME, area, action, detail || '']);
+const wide = (html, cls = 'wide') => html.replace('<div class="modal"', `<div class="modal ${cls}"`);
+const errField = (msg) => `<span class="ikerr">${ic('info', 13)} ${msg}</span>`;
+function inp(id, label, o = {}) {
+  const err = o.err ? 'err' : '', req = o.req ? ' <span class="req">*</span>' : o.opt ? ' <span class="optl">Optional</span>' : '';
+  let ctl;
+  if (o.opts) ctl = `<select id="${id}">${o.ph !== false ? `<option value="">${o.ph || 'Select'}</option>` : ''}${o.opts.map(x => `<option ${String(o.v ?? '') === String(x) ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
+  else if (o.area) ctl = `<textarea id="${id}" placeholder="${esc(o.phText || '')}" style="${o.h ? `height:${o.h}px` : ''}">${esc(o.v ?? '')}</textarea>`;
+  else ctl = `<input id="${id}" type="${o.type || 'text'}" value="${esc(o.v ?? '')}" placeholder="${esc(o.phText || '')}" ${o.w ? `style="max-width:${o.w}px"` : ''}>`;
+  return `<div class="input ${err} ${o.span ? 'span2' : ''}"><label class="lbl" for="${id}">${label}${req}</label>${ctl}${o.err ? errField(o.err) : ''}${o.help ? `<span class="help">${o.help}</span>` : ''}</div>`;
+}
+const chk = (id, label, on) => `<label class="opt" style="padding:0"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><span>${label}</span></label>`;
+const isoOf = (s) => { const m = String(s || '').match(/(\d+)\/(\d+)\/(\d{4})/); return m ? `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}` : ''; };
+const usOf = (iso) => { if (!iso) return ''; const [y, m, d] = iso.split('-').map(Number); return `${m}/${d}/${y}`; };
+
+/* ---------- Real file downloads (tiny valid PDFs and CSVs) ---------- */
+function mkPdf(title, lines) {
+  const clean = (s) => String(s).replace(/[()\\]/g, ' ').replace(/[^\x20-\x7e]/g, ' ');
+  let y = 740; const txt = [`BT /F1 16 Tf 56 ${y} Td (${clean(title)}) Tj ET`]; y -= 34;
+  lines.forEach(l => { txt.push(`BT /F1 11 Tf 56 ${y} Td (${clean(l)}) Tj ET`); y -= 18; });
+  txt.push(`BT /F1 9 Tf 56 60 Td (HealthPacer prototype. Sample document with fictional data.) Tj ET`);
+  const stream = txt.join('\n');
+  const objs = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>', `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+  let out = '%PDF-1.4\n'; const offs = [];
+  objs.forEach((o, i) => { offs.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offs.map(o => String(o).padStart(10, '0') + ' 00000 n \n').join('')}trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return out;
+}
+let DL_NS;
+async function saveFile(name, content, type) {
+  if (window.claude && window.claude.use) { if (DL_NS === undefined) DL_NS = await window.claude.use('downloads'); if (DL_NS) { try { await DL_NS.save({ filename: name, data: new Blob([content], { type }) }); } catch (e) { if (e && e.code !== 'declined') toast('Download is not available in this view'); } return; } }
+  blobSave(name, content, type);
+}
+function blobSave(name, content, type) { const b = new Blob([content], { type }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 400); }
+function downloadDoc(name, meta = {}) {
+  const c = byId(S.caseId);
+  const pdfName = name.replace(/\.(jpg|jpeg|png)$/i, '.pdf');
+  saveFile(pdfName, mkPdf(name.replace(/\.[a-z]+$/i, '').replace(/_/g, ' '), [`Type: ${meta.type || 'Document'}`, `Patient: ${fullName(c)} (${c.id})`, `Added: ${meta.date || fmt(TODAY)} by ${meta.by || ME}`, '', 'This file stands in for the real document in the prototype.']), 'application/pdf');
+}
+const csvCell = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+function downloadCsv(name, head, rows) { saveFile(name, [head, ...rows].map(r => r.map(csvCell).join(',')).join('\n'), 'text/csv'); }
+
+/* ---------- Per-case data that the edit panels change ---------- */
+const INFO = {};
+function info(c) {
+  if (!INFO[c.id]) INFO[c.id] = {
+    medical: { dx: c.dx, dx2: 'Hypertension (I10)', other: 'Ketoconazole (stopped 6/2026)', surg: 'Not applicable' },
+    consent: { status: c.consent, start: '7/29/2026', end: '7/29/2027', text: 'No', vm: 'Yes' },
+    presc: { name: c.prescriber, npi: '9876543210', phone: '(310) 709-4563', fax: '(310) 709-4555' },
+    pap: { program: 'EMX Cares', through: '3/31/2027', approval: 'PAP-77120', household: '3', income: 'Yes, 9/1/2026', docs: 'Tax return 2025' },
+    bi: { date: '9/8/2026', by: 'Janet Mills', ded: '$1,500 · $1,120 met', oop: '$6,000 · $2,340 met', copay: '20% after deductible', pa: 'Yes', step: 'Yes, 1 prior agent', ql: '60 per 30 days', ref: 'SHP-0801-2291' },
+    plans: [
+      { order: 'Primary', name: c.payer === 'No insurance' ? 'Summit Health Plan' : c.payer, type: 'Commercial PPO', member: 'SHP88213407', group: 'GRP-5521', bin: '610014 / SUMRX', eff: '1/1/2026 to 12/31/2026', cov: null },
+      { order: 'Pharmacy', name: 'Crestline PBM', type: 'PBM', member: 'CRX-44018', group: 'RX7730', bin: '004336 / ADV', eff: '1/1/2026 to 12/31/2026', cov: 'Pending' }],
+    covnotes: [['9/8/2026', 'Janet Mills', 'Plan requires documented trial of one prior agent. Ketoconazole trial on file from 2026.'], ['8/1/2026', 'Marketta Howie', 'Reference #SHP-0801-2291. Rep: Carla. PA fax 1 (800) 555-0140.']]
+  };
+  return INFO[c.id];
+}
+
+/* ---------- Case information tab (edit panels) ---------- */
+tabInfo = function (c) {
+  const I = info(c);
+  const eb = (k) => `<button class="btn sm ghost" data-a="edit" data-v="${k}">${ic('edit', 14)} Edit</button>`;
+  return `${tph('Case information')}<div class="blocks">
+  <div class="block" data-sec="Intake"><div class="section-t">${ic('file', 15)}Intake<span class="sp"></span></div><div class="fields">${fld('Entered by', 'Marketta Howie', false)}${fld('Started on', fmt(c.start))}${fld('Referral source', 'Fax from prescriber', false)}</div></div>
+  <div class="block" data-sec="Medical"><div class="section-t">${ic('heart', 15)}Medical<span class="sp"></span>${eb('medical')}</div><div class="fields">${fld('Primary diagnosis', I.medical.dx)}${fld('Secondary diagnosis', I.medical.dx2)}${fld('Other therapy', I.medical.other, false)}${fld('Surgery ineligibility', I.medical.surg, false)}</div></div>
+  <div class="block" data-sec="Consent"><div class="section-t">${ic('shield', 15)}Consent<span class="sp"></span>${eb('consent')}</div><div class="fields"><div class="fld"><span class="lbl">Status</span><span class="val">${pill(c.consent)}</span></div>${fld('Consent start', I.consent.start)}${fld('Consent end', I.consent.end)}<div class="fld"><span class="lbl">Texting / voicemail</span><span class="val">${I.consent.text === 'Yes' ? pill('Covered', 'nodot').replace('Covered', 'Texts OK') : pill('Declined', 'nodot').replace('Declined', 'No texts')} ${I.consent.vm === 'Yes' ? pill('Covered', 'nodot').replace('Covered', 'Voicemail OK') : pill('Declined', 'nodot').replace('Declined', 'No voicemail')}</span></div></div></div>
+  <div class="block" data-sec="Prescriber"><div class="section-t">${ic('users', 15)}Prescriber<span class="sp"></span>${eb('presc')}</div><div class="fields">${fld('Prescriber', c.prescriber)}${fld('NPI', I.presc.npi)}${fld('Phone', I.presc.phone)}${fld('Fax', I.presc.fax)}</div></div>
+  <div class="block full" data-sec="Facility"><div class="section-t">${ic('building', 15)}Facility<span class="sp"></span>${(() => { const f = FACILITIES.find(x => x.name === c.facility); return f ? `<button class="btn sm ghost" data-a="facility" data-id="${f.id}">${ic('arrowr', 14)} Open facility</button>` : ''; })()}</div><div class="fields">${fld('Facility', c.facility)}${fld('Primary contact', 'Tina Alvarez, MA')}${fld('Address', '200 Central Park West, New York, NY 10024')}${fld('Phone', '(310) 709-4563')}${fld('Fax', '(310) 709-4555')}${fld('Tax ID', '12-3456789')}</div></div>
+  </div>`;
+};
+
+/* ---------- Generic edit side panel ---------- */
+const EDITS = {
+  medical: { title: 'Edit medical details', area: 'Case', fields: (c) => { const m = info(c).medical; return [['dx', 'Primary diagnosis', { v: m.dx, req: 1, opts: ['Cushing syndrome (E24.9)', 'Cushing syndrome (E24.0)', 'Ectopic ACTH syndrome (E24.3)', 'Adrenal Cushing syndrome (E24.8)'] }], ['dx2', 'Secondary diagnosis', { v: m.dx2, opt: 1 }], ['other', 'Other therapy tried', { v: m.other, opt: 1 }], ['surg', 'Surgery ineligibility', { v: m.surg, opts: ['Not applicable', ...SURGERY], ph: false }]]; }, save: (c, v) => { Object.assign(info(c).medical, v); c.dx = v.dx; } },
+  consent: { title: 'Edit consent', area: 'Consent', fields: (c) => { const m = info(c).consent; return [['status', 'Consent status', { v: c.consent, opts: CONSENT, ph: false }], ['start', 'Consent start', { v: isoOf(m.start), type: 'date', w: 200 }], ['end', 'Consent end', { v: isoOf(m.end), type: 'date', w: 200 }], ['text', 'OK to text', { v: m.text, opts: ['Yes', 'No'], ph: false }], ['vm', 'OK to leave voicemail', { v: m.vm, opts: ['Yes', 'No'], ph: false }]]; }, save: (c, v) => { v.start = usOf(v.start); v.end = usOf(v.end); Object.assign(info(c).consent, v); c.consent = v.status; } },
+  presc: { title: 'Edit prescriber', area: 'Case', fields: (c) => { const m = info(c).presc; return [['name', 'Prescriber', { v: c.prescriber, opts: PRESCRIBERS.map(p => p[0]), ph: false, help: 'Changing the prescriber also updates the facility.' }], ['npi', 'NPI', { v: m.npi, w: 200 }], ['phone', 'Phone', { v: m.phone, w: 220 }], ['fax', 'Fax', { v: m.fax, w: 220 }]]; }, save: (c, v) => { Object.assign(info(c).presc, v); c.prescriber = v.name; const p = PRESCRIBERS.find(x => x[0] === v.name); if (p) c.facility = p[1]; } },
+  pap: { title: 'Edit patient assistance', area: 'PAP', fields: (c) => { const m = info(c).pap; return [['status', 'PAP status', { v: c.pap, opts: PAP, ph: false }], ['program', 'Program', { v: m.program, opts: ['EMX Cares', 'EMX Bridge supply'], ph: false }], ['through', 'Approved through', { v: isoOf(m.through), type: 'date', w: 200 }], ['approval', 'Approval ID', { v: m.approval, w: 200 }], ['household', 'Household size', { v: m.household, type: 'number', w: 120 }], ['income', 'Income verified', { v: m.income, opts: ['Yes, 9/1/2026', 'Not yet', 'Waived'], ph: false }], ['docs', 'Documents on file', { v: m.docs, opt: 1 }]]; }, save: (c, v) => { c.pap = v.status; delete v.status; v.through = usOf(v.through); Object.assign(info(c).pap, v); } },
+  patient: { title: 'Edit patient', area: 'Patient', fields: (c) => [['first', 'First name', { v: c.first, req: 1 }], ['mi', 'Middle initial', { v: c.mi, w: 80 }], ['last', 'Last name', { v: c.last, req: 1 }], ['dob', 'Date of birth', { v: isoOf(fmt(c.dob)), type: 'date', w: 200, req: 1 }], ['gender', 'Gender', { v: c.gender, opts: ['Female', 'Male', 'Other', 'Prefer not to say'], ph: false }], ['phone', 'Mobile phone', { v: c.phone, w: 220 }], ['street', 'Street address', { v: c.street }], ['city', 'City, state, zip', { v: c.city }], ['lang', 'Preferred language', { v: c.lang, opts: ['English', 'Spanish', 'Vietnamese', 'Other'], ph: false }], ['best', 'Best time to call', { v: c.best, opts: ['Mornings', 'Afternoons', 'Weekdays after 5pm', 'Any time'], ph: false }], ['alt', 'Alternate contact', { v: c.alt, opt: 1 }]], save: (c, v) => { const [y, m, d] = v.dob.split('-').map(Number); v.dob = new Date(y, m - 1, d); Object.assign(c, v); } },
+  org: { title: 'Edit organization', fields: (o) => [['name', 'Name', { v: o.name, req: 1 }], ['type', 'Type', { v: o.type, opts: ['Commercial', 'Medicare', 'Medicaid', 'Pharmacy benefit manager'], ph: false }], ['st', 'Street address', { v: o.st }], ['city', 'City, state, zip', { v: o.city }], ['phone', 'Phone', { v: o.phone, w: 220 }], ['fax', 'PA fax', { v: o.fax, w: 220 }]], save: (o, v) => { const old = o.name; Object.assign(o, v); if (old !== v.name) CASES.forEach(c => { if (c.payer === old) c.payer = v.name; }); } },
+  facility: { title: 'Edit facility', fields: (f) => [['name', 'Facility name', { v: f.name, req: 1 }], ['type', 'Facility type', { v: f.type, opts: [...new Set(FAC_TYPES)], ph: false }], ['contact', 'Primary contact', { v: f.contact }], ['phone', 'Phone', { v: f.phone, w: 220 }], ['fax', 'Fax', { v: f.fax, w: 220 }], ['npi', 'NPI', { v: f.npi, w: 200 }], ['tax', 'Tax ID', { v: f.tax, w: 200 }]], save: (f, v) => { const old = f.name; Object.assign(f, v); if (old !== v.name) CASES.forEach(c => { if (c.facility === old) c.facility = v.name; }); } },
+  user: { title: 'Edit user', fields: (u) => [['name', 'Name', { v: u.name, req: 1 }], ['email', 'Email', { v: u.email, req: 1, type: 'email' }], ['role', 'Role', { v: u.role, opts: USER_ROLES[u.kind || 'fac'], ph: false }], ['status', 'Status', { v: u.status, opts: ['Active', 'Invite pending', 'Inactive'], ph: false }]], save: (u, v) => Object.assign(u, v) }
+};
+const USER_ROLES = { fac: ['Prescriber', 'Office staff', 'Administrator'], pharm: ['Pharmacist', 'Pharmacy technician', 'Intake coordinator', 'Administrator'], hub: ['Patient access coordinator', 'Case manager', 'Supervisor', 'Administrator', 'Read only'] };
+function editTarget(d) {
+  if (d.id === 'org') return CARRIERS.concat(PBMS, PHARMACIES).find(x => x.id === S.detail.org) || CARRIERS[0];
+  if (d.id === 'facility') return FACILITIES.find(x => x.id === S.detail.facility) || FACILITIES[0];
+  if (d.id === 'user') return findUser(d.ref);
+  if (d.id === 'patient') return (patientOf(S.detail.patient) || PATIENTS[0]).c;
+  return byId(S.caseId);
+}
+function findUser(ref) { return allUsers().find(u => u.ref === ref); }
+function allUsers() {
+  FACILITIES.forEach(f => f.users.forEach((u, i) => { u.ref = u.ref || `${f.id}-${i}-${u.email}`; u.fac = f; u.kind = 'fac'; }));
+  return FACILITIES.flatMap(f => f.users).concat(PUSERS, HUBUSERS);
+}
+
+/* ---------- Drawer types: document viewer, edit panel, printable list ---------- */
+const _drawer0 = drawer;
+drawer = function () {
+  const d = S.drawer; if (!d || !['doc', 'edit'].includes(d.type)) return _drawer0();
+  let title = '', body = '', foot = '', cls = '';
+  if (d.type === 'doc') {
+    const doc = d.doc; title = doc.name; cls = 'wide';
+    const pages = doc.pages || 2, pg = Math.min(d.page || 1, pages), z = d.zoom || 1;
+    const lines = (n) => Array.from({ length: n }, (_, i) => `<i style="width:${[92, 100, 84, 97, 70, 100, 88, 60][i % 8]}%"></i>`).join('');
+    body = `<div class="viewer"><div class="vbar"><button class="iconbtn" data-a="docpg" data-v="-1" ${pg <= 1 ? 'disabled' : ''} aria-label="Previous page">${ic('chevl', 16)}</button><span class="num">Page ${pg} of ${pages}</span><button class="iconbtn" data-a="docpg" data-v="1" ${pg >= pages ? 'disabled' : ''} aria-label="Next page">${ic('chevr', 16)}</button><span class="sp"></span><button class="iconbtn" data-a="doczoom" data-v="-1" aria-label="Zoom out" ${z <= .8 ? 'disabled' : ''}>−</button><span class="num">${Math.round(z * 100)}%</span><button class="iconbtn" data-a="doczoom" data-v="1" aria-label="Zoom in" ${z >= 1.4 ? 'disabled' : ''}>+</button></div>
+      <div class="vpage-wrap"><div class="vpage" style="--z:${z}"><div class="vhead"><b>${esc((doc.type || 'Document').toUpperCase())}</b><span>${pg === 1 ? esc(doc.name.replace(/\.[a-z]+$/i, '').replace(/_/g, ' ')) : 'Continued'}</span></div>${pg === 1 ? `<div class="vgrid"><span>Patient</span><span>${esc(fullName(byId(S.caseId)))}</span><span>Case</span><span>${S.caseId}</span><span>Date</span><span>${esc(doc.date || fmt(TODAY))}</span></div>` : ''}${lines(pg === 1 ? 9 : 14)}<div class="vsig">${pg === pages ? '<em>Signature on file</em>' : ''}</div></div></div></div>
+      <div class="fields">${fld('Type', doc.type || 'Document', false)}${fld('Added', `${doc.date || fmt(TODAY)}${doc.by ? ' by ' + doc.by : ''}`, false)}${doc.size ? fld('Size', doc.size, false) : ''}${doc.src ? fld('Source', doc.src, false) : ''}</div>
+      ${doc.di != null ? `<div class="sharerow"><span>Shared with</span><button class="pill ${DOCS[doc.di][5] ? 't-ok' : 't-neutral'}" data-a="docshare" data-v="5" data-id="${doc.di}">${DOCS[doc.di][5] ? ic('check', 12) : ''} Provider</button><button class="pill ${DOCS[doc.di][6] ? 't-ok' : 't-neutral'}" data-a="docshare" data-v="6" data-id="${doc.di}">${DOCS[doc.di][6] ? ic('check', 12) : ''} Pharmacy</button></div>` : ''}`;
+    foot = `<button class="btn" data-a="docfax">${ic('fax', 16)} Fax</button><button class="btn" data-a="docprint">Print</button><span style="flex:1"></span><button class="btn primary" data-a="docdl">${ic('download', 16)} Download</button>`;
+  }
+  if (d.type === 'edit') {
+    const E = EDITS[d.id], tgt = editTarget(d), fs = E.fields(tgt), err = d.err || {};
+    title = E.title + (d.id === 'user' ? ` · ${tgt.name}` : '');
+    body = `<div class="editform">${fs.map(([k, l, o]) => inp('ed-' + k, l, { ...o, err: err[k] })).join('')}</div>${['medical', 'consent', 'presc', 'pap'].includes(d.id) ? `<div class="note-banner">${ic('info', 16)}<span>Changes are recorded in the audit trail with your name.</span></div>` : ''}`;
+    foot = `<span style="flex:1"></span><button class="btn" data-a="drawerclose">Cancel</button><button class="btn primary" data-a="editsave" data-v="${d.id}">Save changes</button>`;
+  }
+  const enter = LAST_DRAWER !== d.type + d.id && !LAST_DRAWER;
+  return `<div class="drawer-scrim ${enter ? 'enter' : ''}" data-a="drawerclose"></div><aside class="drawer ${cls} ${enter ? 'enter' : ''}" role="dialog" aria-label="${esc(title)}"><div class="drawer-h"><h2>${esc(title)}</h2><button class="iconbtn" data-a="drawerclose" aria-label="Close">${ic('x', 18)}</button></div><div class="drawer-b">${body}</div><div class="drawer-f">${foot}</div></aside>`;
+};
+function openDoc(doc) { S.drawer = { type: 'doc', id: doc.name, doc, page: 1, zoom: 1 }; S.pop = null; S.modal = null; }
+const docLink = (name, extra = {}) => `<a href="#" data-a="docopen" data-v="${esc(name)}" ${Object.entries(extra).map(([k, v]) => `data-${k}="${esc(v)}"`).join(' ')}>${esc(name)}</a>`;
+
+/* ---------- Documents tab ---------- */
+const DOC_TYPES = ['Appeal', 'Prior authorization', 'Payer correspondence', 'Insurance', 'Enrollment', 'Prescription', 'Consent', 'Lab results', 'Clinical notes', 'Other'];
+tabDocs = function () {
+  const q = (S.docq || '').toLowerCase();
+  const rows = DOCS.map((d, i) => [d, i]).filter(([d]) => !q || (d[0] + ' ' + d[1] + ' ' + d[3]).toLowerCase().includes(q));
+  return `${tph('Documents', `<label class="search" style="height:34px">${ic('search', 15)}<input id="docq" data-in="docq" value="${esc(S.docq || '')}" placeholder="Search documents" style="width:160px"></label><button class="btn primary" data-a="modal" data-v="adddoc">${ic('plus', 16)} Add document</button>`)}
+  <div class="tablewrap"><table class="dt"><thead><tr><th>Name</th><th>Type</th><th>Added</th><th>Added by</th><th>Size</th><th>Provider</th><th>Pharmacy</th><th aria-label="Actions"></th></tr></thead><tbody>
+  ${rows.map(([[n, t, d, b, s, pv, ph], i]) => `<tr class="${S.flash === 'doc' + i ? 'flash' : ''}"><td>${ic('file', 15)} <a href="#" data-a="docopen" data-i="${i}">${esc(n)}</a></td><td>${t}</td><td class="num">${d}</td><td>${b}</td><td class="num">${s}</td>
+  <td><button class="pill ${pv ? 't-ok' : 't-neutral'}" style="border:0" data-a="docshare" data-v="5" data-id="${i}" title="Click to ${pv ? 'stop sharing' : 'share'}">${pv ? 'Shared' : 'Not shared'}</button></td><td><button class="pill ${ph ? 't-ok' : 't-neutral'}" style="border:0" data-a="docshare" data-v="6" data-id="${i}" title="Click to ${ph ? 'stop sharing' : 'share'}">${ph ? 'Shared' : 'Not shared'}</button></td><td style="text-align:right;white-space:nowrap"><button class="iconbtn" data-a="docdl" data-i="${i}" aria-label="Download ${esc(n)}">${ic('download', 16)}</button><button class="iconbtn" data-a="rowmenu" data-v="D:${i}" aria-label="More actions">${ic('more', 16)}</button></td></tr>`).join('') || `<tr><td colspan="8" class="muted" style="height:90px;text-align:center">No documents match “${esc(S.docq)}”.</td></tr>`}</tbody></table></div>`;
+};
+
+/* ---------- Messages tab: composer on top ---------- */
+tabMessages = function () {
+  const e = S.msgErr;
+  return `${tph('Messages', `<span class="muted" style="font-size:12.5px">Messages go to the provider portal or pharmacy</span>`)}
+  <div class="composer top ${e ? 'err' : ''}"><span class="avatar">JM</span><div class="cbody"><label class="sr" for="newmsg">New message</label><textarea id="newmsg" placeholder="Write a message">${esc(S.msgDraft || '')}</textarea>${e ? errField('Write a message first') : ''}<div class="crow"><select id="msgto" aria-label="Send to">${['To provider', 'To pharmacy', 'Internal note'].map(x => `<option ${S.msgTo === x ? 'selected' : ''}>${x}</option>`).join('')}</select><span class="muted" style="font-size:12px">${S.msgTo === 'Internal note' ? 'Only hub staff can see internal notes' : S.msgTo === 'To pharmacy' ? 'Visible to ' + esc(byId(S.caseId).pharmacy) : 'Visible in the provider portal'}</span><span class="sp"></span><button class="btn primary" data-a="msgsend">${ic('send', 16)} Send</button></div></div></div>
+  <div class="feed">${MESSAGES.map(([w, role, d, t, tags], i) => `<div class="msg ${S.flash === 'msg' + i ? 'flash' : ''}"><span class="avatar" style="${role === 'Hub' ? '' : 'background:var(--navy)'}">${w.replace('Dr. ', '').split(' ').map(x => x[0]).join('').slice(0, 2)}</span><div class="hd"><b>${esc(w)}</b><span class="pill nodot ${role === 'Hub' ? 't-ok' : role === 'HCP' ? 't-info' : 't-violet'}">${role}</span><span class="muted num">${d}</span></div><button class="iconbtn" data-a="rowmenu" data-v="M:${i}" aria-label="Message actions">${ic('more', 16)}</button><p>${esc(t)}</p><div class="tags">${tags.map(x => `<span class="muted" style="font-size:12px">${x}</span>`).join('')}</div></div>`).join('')}</div>`;
+};
+
+/* ---------- Notes tab: highlighted text, add, log call, per-note actions ---------- */
+tabNotes = function () {
+  return `${tph('Notes and phone log', `<button class="btn" data-a="modal" data-v="logcall">${ic('phone', 16)} Log call</button><button class="btn primary" data-a="modal" data-v="casenote">${ic('plus', 16)} Add note</button>`)}
+  <div class="feed">${NOTES.map(([w, type, d, t, hl], i) => `<div class="msg ${hl ? 'hlnote' : ''} ${S.flash === 'note' + i ? 'flash' : ''}"><span class="avatar">${w.split(' ').map(x => x[0]).join('')}</span><div class="hd"><b>${esc(w)}</b><span class="pill nodot ${type === 'Note' ? 't-navy' : 't-info'}">${type}</span><span class="muted num">${d}</span></div><button class="iconbtn" data-a="rowmenu" data-v="N:${i}" aria-label="Note actions">${ic('more', 16)}</button><p><span class="${hl ? 'hltext' : ''}">${esc(t)}</span></p></div>`).join('') || '<div class="emptyline">No notes yet.</div>'}</div>`;
+};
+
+/* ---------- Faxes tab ---------- */
+tabFaxes = function () {
+  return `${tph('Faxes', `<button class="btn primary" data-a="modal" data-v="sendfax">${ic('fax', 16)} Send fax</button>`)}
+  <div class="tablewrap"><table class="dt"><thead><tr><th>Date</th><th>Direction</th><th>Recipient / sender</th><th>Number</th><th>Pages</th><th>Status</th></tr></thead><tbody>${FAXES.map(([d, dir, who, num, p, s], i) => `<tr class="click ${S.flash === 'fax' + i ? 'flash' : ''}" data-a="faxopen" data-i="${i}"><td class="num">${d}</td><td>${dir}</td><td>${who}</td><td class="num">${num}</td><td class="num">${p}</td><td>${fxPill(s)}</td></tr>`).join('')}</tbody></table></div>`;
+};
+
+/* ---------- Prescription tab: document links open the viewer ---------- */
+const _tabRx0 = tabRx;
+tabRx = (c) => _tabRx0(c).replace(/<a href="#" data-a="toast" data-v="Document preview opens here">([^<]+)<\/a>/g, (m, n) => docLink(n, { type: 'Prescription' }));
+
+/* ---------- Benefits tab ---------- */
+tabBenefits = function (c) {
+  const I = info(c), b = I.bi;
+  return `${tph('Benefits', `<span class="muted" style="font-size:12.5px">Verified ${b.date} by ${esc(b.by)}</span><button class="btn" data-a="modal" data-v="bi">${ic('refresh', 16)} Re-verify</button><button class="btn" data-a="modal" data-v="addplan">${ic('plus', 16)} Add plan</button>`)}
+  <div class="tablewrap"><table class="dt"><thead><tr><th>Order</th><th>Plan</th><th>Type</th><th>Member ID</th><th>Group</th><th>BIN / PCN</th><th>Effective</th><th>Coverage</th><th aria-label="Actions"></th></tr></thead><tbody>
+  ${I.plans.map((p, i) => `<tr class="${S.flash === 'plan' + i ? 'flash' : ''}"><td>${p.order}</td><td class="strong">${esc(p.name)}</td><td>${esc(p.type)}</td><td class="mono">${esc(p.member)}</td><td class="mono">${esc(p.group || '')}</td><td class="mono">${esc(p.bin || '')}</td><td class="num">${esc(p.eff)}</td><td>${pill(p.cov || c.coverage)}</td><td style="text-align:right"><button class="iconbtn" data-a="modal" data-v="addplan" data-id="${i}" aria-label="Edit plan">${ic('edit', 15)}</button></td></tr>`).join('')}</tbody></table></div>
+  <div class="blocks"><div class="block" data-sec="Benefit investigation"><div class="section-t">${ic('card', 15)}Benefit investigation</div><div class="fields">${fld('Deductible', b.ded, false)}${fld('Out of pocket max', b.oop, false)}${fld('Specialty copay', b.copay, false)}${fld('PA required', b.pa, false)}${fld('Step therapy', b.step, false)}${fld('Quantity limit', b.ql, false)}</div></div>
+  <div class="block" data-sec="Coverage notes"><div class="section-t">${ic('chat', 15)}Coverage notes</div><div class="feed" style="margin:0 -16px">${I.covnotes.map(([d, w, t]) => `<div class="msg" style="grid-template-columns:1fr"><div class="hd"><b>${w}</b><span class="muted num">${d}</span></div><p style="grid-column:1">${esc(t)}</p></div>`).join('')}</div></div></div>`;
+};
+
+/* ---------- PAP tab ---------- */
+tabPap = function (c) {
+  const m = info(c).pap;
+  return `${tph('Patient assistance program', `<button class="btn" data-a="edit" data-v="pap">${ic('edit', 16)} Edit</button>`)}<div class="blocks">
+  <div class="block" data-sec="Assistance approval"><div class="section-t">${ic('check', 15)}Assistance approval</div><div class="fields"><div class="fld"><span class="lbl">PAP status</span><span class="val">${pill(c.pap)}</span></div>${fld('Program', m.program, false)}${fld('Approved through', m.through)}${fld('Approval ID', m.approval)}</div></div>
+  <div class="block" data-sec="Financial information"><div class="section-t">${ic('card', 15)}Financial information</div><div class="fields">${fld('Household size', m.household, false)}${fld('Income verified', m.income, false)}${fld('Documents', m.docs, false)}</div></div></div>`;
+};
+
+/* ---------- Audit trail: search and date range work ---------- */
+const AUD_RANGES = ['Any time', 'Last 7 days', 'Last 30 days', 'Last 90 days'];
+tabAudit = function () {
+  const q = (S.audq || '').toLowerCase(), r = S.audr || 'Any time', lim = { 'Last 7 days': 7, 'Last 30 days': 30, 'Last 90 days': 90 }[r];
+  const rows = AUDIT.filter(a => (!q || a.join(' ').toLowerCase().includes(q)) && (!lim || (() => { const [m, d, y] = a[0].split(' ')[0].split('/').map(Number); return -dayDiff(new Date(y, m - 1, d)) <= lim; })()));
+  return `${tph('Audit trail', `<label class="search" style="height:34px">${ic('search', 15)}<input id="audq" data-in="audq" value="${esc(S.audq || '')}" placeholder="Search activity" style="width:160px"></label><div class="ms"><button data-a="menu" data-v="audr" aria-expanded="${S.menu === 'audr'}">${ic('cal', 14)} ${r} ${ic('chevd', 14)}</button>${S.menu === 'audr' ? `<div class="menu-pop" style="right:0;top:40px;width:180px">${AUD_RANGES.map(x => `<button data-a="audr" data-v="${x}">${x === r ? ic('check', 14) : '<span style="width:14px"></span>'} ${x}</button>`).join('')}</div>` : ''}</div><button class="btn" data-a="audcsv">${ic('download', 16)} Export</button>`)}
+  <div class="tablewrap"><table class="dt"><thead><tr><th>When</th><th>User</th><th>Area</th><th>Action</th><th>Details</th></tr></thead><tbody>${rows.map(([w, u, a, x, d]) => `<tr><td class="num">${w}</td><td>${u}</td><td>${a}</td><td class="strong">${x}</td><td class="wrap">${esc(d)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted" style="height:90px;text-align:center">No activity in this range.</td></tr>'}</tbody></table></div>`;
+};
+
+/* ---------- Row menus for documents, messages, notes and users ---------- */
+const _popMenu0 = popMenu;
+popMenu = function () {
+  const p = S.pop; if (!p) return '';
+  let items = null; const n = +p.id.slice(2);
+  if (p.id.startsWith('D:')) items = `<button data-a="docopen" data-i="${n}">${ic('file', 16)} Preview</button><button data-a="docdl" data-i="${n}">${ic('download', 16)} Download</button><button data-a="modal" data-v="sendfax" data-id="${n}">${ic('fax', 16)} Fax this document</button><button data-a="modal" data-v="docrename" data-id="${n}">${ic('edit', 16)} Rename or retype</button><hr><button data-a="modal" data-v="docrm" data-id="${n}" style="color:var(--danger)">${ic('x', 16)} Remove</button>`;
+  if (p.id.startsWith('M:')) { const m = MESSAGES[n]; items = `<button data-a="msgreply" data-i="${n}">${ic('send', 16)} Reply</button><button data-a="copy" data-v="${esc(m[3])}">${ic('copy', 16)} Copy text</button>${m[0] === ME ? `<hr><button data-a="modal" data-v="msgrm" data-id="${n}" style="color:var(--danger)">${ic('x', 16)} Delete message</button>` : ''}`; }
+  if (p.id.startsWith('N:')) { const nt = NOTES[n]; items = `<button data-a="modal" data-v="casenote" data-id="${n}">${ic('edit', 16)} Edit</button><button data-a="casenotehl" data-i="${n}">${ic('flag', 16)} ${nt[4] ? 'Remove highlight' : 'Highlight'}</button><hr><button data-a="modal" data-v="casenoterm" data-id="${n}" style="color:var(--danger)">${ic('x', 16)} Remove</button>`; }
+  if (p.id.startsWith('u')) { const u = allUsers().find(x => 'u' + x.email === p.id || 'u' + x.ref === p.id); if (u) items = `<button data-a="useredit" data-v="${esc(u.ref)}">${ic('edit', 16)} Edit</button><button data-a="modal" data-v="pwreset" data-id="${esc(u.ref)}">${ic('key', 16)} Send password reset</button>${u.status !== 'Active' ? `<button data-a="modal" data-v="reinvite" data-id="${esc(u.ref)}">${ic('mail', 16)} Resend invite</button>` : ''}<hr><button data-a="modal" data-v="userrm" data-id="${esc(u.ref)}" style="color:var(--danger)">${ic('x', 16)} Remove</button>`; }
+  if (items == null) return _popMenu0();
+  const left = Math.max(12, Math.min(p.x - 240, window.innerWidth - 260));
+  const top = p.y + 240 > window.innerHeight ? p.y - p.h - 8 - 190 : p.y + 6;
+  return `<div class="menu-pop pop-fixed" style="position:fixed;left:${left}px;top:${Math.max(8, top)}px;width:240px">${items}</div>`;
+};
+
+/* ---------- Modals ---------- */
+const FAX_BOOK = () => { const c = byId(S.caseId); const pr = info(c).presc; return [[`${c.payer} PA`, 'Carrier', (CARRIERS.find(x => x.name === c.payer) || CARRIERS[0]).fax], [`${c.payer} appeals`, 'Carrier', (CARRIERS.find(x => x.name === c.payer) || CARRIERS[0]).fax.replace(/\d$/, '2')], [c.facility, 'Facility', pr.fax], [c.pharmacy, 'Pharmacy', '1 (855) 555-0188'], ['Crestline PBM', 'PBM', '1 (888) 555-1113']]; };
+const _xm2 = extraModal;
+extraModal = function (m, wrap) {
+  const c = byId(S.caseId), e = m.err || {};
+  const cancel = `<button class="btn" data-a="mclose">Cancel</button>`;
+  if (m.type === 'adddoc') { const fac = m.id === 'fac';
+    return wrap('Add document', `<label class="dropzone ${e.file ? 'err' : ''}"><input type="file" id="docfile">${ic('upload', 22)}<span><b>${S.pickName ? esc(S.pickName) : 'Choose a file'}</b><br><span class="muted">${S.pickName ? 'Click to choose a different file' : 'PDF, JPG or PNG up to 25 MB'}</span></span></label>${e.file ? errField('Choose a file to upload') : ''}
+      ${inp('docname', 'Display name', { opt: 1, v: '', phText: S.pickName || 'Uses the file name if left blank' })}
+      ${inp('doctype', 'Document type', { req: 1, opts: fac ? ['Agreement', 'Tax form', 'Template', 'Other'] : DOC_TYPES, err: e.type })}
+      ${fac ? '' : `<div class="input"><span class="lbl">Share with</span><div style="display:flex;gap:18px">${chk('docpv', 'Provider portal', false)}${chk('docph', 'Pharmacy', false)}</div></div>`}`,
+      `${cancel}<button class="btn primary" data-a="adddocsave" data-v="${fac ? 'fac' : ''}">Add document</button>`); }
+  if (m.type === 'docrename') { const d = DOCS[+m.id]; return wrap('Rename document', `${inp('rnname', 'Name', { v: d[0], req: 1, err: e.name })}${inp('rntype', 'Document type', { v: d[1], opts: DOC_TYPES, ph: false })}`, `${cancel}<button class="btn primary" data-a="docrenamesave" data-id="${m.id}">Save</button>`); }
+  if (m.type === 'docrm') { const d = DOCS[+m.id]; return wrap('Remove this document?', `<p style="margin:0"><b>${esc(d[0])}</b> will be removed from this case${d[5] || d[6] ? ' and no longer shared with the ' + [d[5] && 'provider', d[6] && 'pharmacy'].filter(Boolean).join(' or ') : ''}. It stays in the audit trail.</p>`, `${cancel}<button class="btn danger" data-a="docrmsave" data-id="${m.id}">Remove document</button>`); }
+  if (m.type === 'msgrm') return wrap('Delete this message?', `<p style="margin:0">${esc(MESSAGES[+m.id][3])}</p>`, `${cancel}<button class="btn danger" data-a="msgrmsave" data-id="${m.id}">Delete</button>`);
+  if (m.type === 'casenote') { const nt = m.id != null && m.id !== '' ? NOTES[+m.id] : null;
+    return wrap(nt ? 'Edit note' : 'Add note', `${inp('cntext', 'Note', { area: 1, h: 130, v: nt ? nt[3] : '', req: 1, err: e.text, phText: 'What should the team know?' })}${chk('cnhl', 'Highlight this note so it stands out to staff', nt ? nt[4] : false)}`, `${cancel}<button class="btn primary" data-a="casenotesave" data-id="${m.id ?? ''}">Save note</button>`); }
+  if (m.type === 'casenoterm') return wrap('Remove this note?', `<p style="margin:0">${esc(NOTES[+m.id][3])}</p>`, `${cancel}<button class="btn danger" data-a="casenotermsave" data-id="${m.id}">Remove note</button>`);
+  if (m.type === 'logcall') return wide(wrap('Log a call', `<div class="seg lite" role="radiogroup" aria-label="Direction">${['Outbound', 'Inbound'].map(x => `<button data-a="calldir" data-v="${x}" aria-pressed="${(S.callDir || 'Outbound') === x}">${x === 'Outbound' ? 'I called' : 'They called'}</button>`).join('')}</div>
+      <div class="polgrid">${inp('clwho', 'Spoke with', { req: 1, err: e.who, opts: [`${c.first} ${c.last} (patient)`, `${c.alt} (alternate contact)`, `${c.facility} office`, c.prescriber, `${c.payer} rep`, `${c.pharmacy} pharmacy`] })}${inp('clnum', 'Phone number', { v: c.phone })}
+      ${inp('clout', 'Outcome', { req: 1, err: e.out, opts: ['Reached, resolved', 'Reached, follow-up needed', 'Left voicemail', 'No answer', 'Wrong number'] })}${inp('clmin', 'Length (minutes)', { type: 'number', v: '5', w: 120 })}</div>
+      ${inp('clnote', 'Call notes', { area: 1, h: 100, req: 1, err: e.note, phText: 'What was discussed and agreed' })}
+      <div class="polgrid">${inp('clfu', 'Next follow-up', { type: 'date', opt: 1, v: c.follow ? isoOf(fmt(c.follow)) : '' })}<div class="input" style="justify-content:flex-end">${chk('clhl', 'Highlight this call', false)}</div></div>`, `${cancel}<button class="btn primary" data-a="logcallsave">Save call</button>`));
+  if (m.type === 'sendfax') { const book = FAX_BOOK(); const pre = m.id != null && m.id !== '' ? +m.id : null; const picked = S.faxDocs || new Set(pre != null ? [pre] : []); S.faxDocs = picked;
+    const caseMode = S.route !== 'case';
+    return wide(wrap('Send fax', `${caseMode ? inp('fxcase', 'Case', { req: 1, err: e.case, opts: CASES.slice(0, 20).map(x => `${x.id} · ${fullName(x)}`), v: S.faxCase || '' }) : ''}
+      <div class="polgrid">${inp('fxto', 'Recipient', { req: 1, err: e.to, opts: [...book.map(b => `${b[0]} (${b[1]})`), 'Other number'], v: S.faxTo || '' })}${inp('fxnum', 'Fax number', { req: 1, err: e.num, v: S.faxNum || '' })}</div>
+      <div class="input ${e.docs ? 'err' : ''}"><span class="lbl">Documents to send <span class="req">*</span></span><div class="docpick">${DOCS.map((d, i) => `<label class="opt"><input type="checkbox" data-a="faxdoc" data-i="${i}" ${picked.has(i) ? 'checked' : ''}><span>${esc(d[0])}</span><span class="muted" style="margin-left:auto;font-size:12px">${d[1]}</span></label>`).join('')}</div>${e.docs ? errField('Choose at least one document') : ''}</div>
+      ${chk('fxcover', 'Include a cover sheet', true)}${inp('fxmsg', 'Cover note', { area: 1, h: 70, opt: 1, phText: 'Printed on the cover sheet' })}`, `<span class="muted" style="margin-right:auto;font-size:12.5px">${picked.size} ${picked.size === 1 ? 'document' : 'documents'} selected</span>${cancel}<button class="btn primary" data-a="sendfaxsave">${ic('send', 16)} Send fax</button>`)); }
+  if (m.type === 'addplan') { const I = info(c); const p = m.id != null && m.id !== '' ? I.plans[+m.id] : {};
+    return wide(wrap(p.name ? 'Edit plan' : 'Add plan', `<div class="polgrid">${inp('plorder', 'Order', { v: p.order, opts: ['Primary', 'Secondary', 'Tertiary', 'Pharmacy'], req: 1, err: e.order })}${inp('plname', 'Plan', { v: p.name, opts: [...CARRIERS.map(x => x.name), ...PBMS.map(x => x.name)], req: 1, err: e.name })}
+      ${inp('pltype', 'Plan type', { v: p.type, opts: ['Commercial PPO', 'Commercial HMO', 'Medicare Part D', 'Medicaid', 'PBM'], ph: false })}${inp('plmember', 'Member ID', { v: p.member, req: 1, err: e.member })}${inp('plgroup', 'Group', { v: p.group, opt: 1 })}${inp('plbin', 'BIN / PCN', { v: p.bin, opt: 1 })}
+      ${inp('plfrom', 'Effective from', { type: 'date', v: p.eff ? isoOf(p.eff.split(' to ')[0]) : '2026-01-01' })}${inp('plto', 'Effective to', { type: 'date', v: p.eff ? isoOf(p.eff.split(' to ')[1]) : '2026-12-31' })}</div>`, `${p.name ? `<button class="btn danger" data-a="planrm" data-id="${m.id}" style="margin-right:auto">Remove plan</button>` : ''}${cancel}<button class="btn primary" data-a="plansave" data-id="${m.id ?? ''}">${p.name ? 'Save plan' : 'Add plan'}</button>`)); }
+  if (m.type === 'bi') { const b = S.bi || {}; const st = m.step || 0; const I = info(c);
+    const steps = ['Plan and call', 'Benefits', 'Result'];
+    const head = `<ol class="mstepper">${steps.map((s, i) => `<li class="${i < st ? 'done' : i === st ? 'on' : ''}"><span>${i < st ? ic('check', 12) : i + 1}</span>${s}</li>`).join('')}</ol>`;
+    let body = '';
+    if (st === 0) body = `<div class="polgrid">${inp('biplan', 'Plan to verify', { req: 1, err: e.plan, opts: I.plans.map(p => p.name), v: b.plan || I.plans[0].name })}${inp('bimethod', 'Verified by', { opts: ['Phone call with payer rep', 'Payer portal', 'Electronic (270/271)'], v: b.method, ph: false })}${inp('birep', 'Rep name', { v: b.rep, opt: 1 })}${inp('biref', 'Call reference #', { v: b.ref, req: 1, err: e.ref })}</div>`;
+    if (st === 1) body = `<div class="polgrid">${inp('bided', 'Deductible', { v: b.ded ?? I.bi.ded })}${inp('bioop', 'Out of pocket max', { v: b.oop ?? I.bi.oop })}${inp('bicopay', 'Specialty copay', { v: b.copay ?? I.bi.copay })}${inp('biql', 'Quantity limit', { v: b.ql ?? I.bi.ql })}${inp('bipa', 'PA required', { v: b.pa ?? I.bi.pa, opts: ['Yes', 'No', 'Unknown'], ph: false })}${inp('bistep', 'Step therapy', { v: b.step ?? I.bi.step, opts: ['No', 'Yes, 1 prior agent', 'Yes, 2 prior agents'], ph: false })}</div>`;
+    if (st === 2) body = `${inp('bicov', 'Coverage outcome', { req: 1, err: e.cov, opts: ['Covered', 'Drug Not Covered', 'Pending', 'Not Applicable'], v: b.cov })}${inp('binote', 'Coverage note', { area: 1, h: 90, opt: 1, v: b.note, phText: 'Anything the team should know about this plan' })}<div class="rvmini">${[['Plan', b.plan], ['Reference', b.ref], ['Deductible', b.ded], ['Copay', b.copay], ['PA required', b.pa], ['Step therapy', b.step]].map(([k, v]) => `<span>${k}</span><b>${esc(v || '')}</b>`).join('')}</div>`;
+    return wide(wrap('Re-verify benefits', head + body, `${st ? `<button class="btn" data-a="bistep" data-v="-1" style="margin-right:auto">${ic('chevl', 16)} Back</button>` : ''}${cancel}${st < 2 ? `<button class="btn primary" data-a="bistep" data-v="1">Continue ${ic('chevr', 16)}</button>` : `<button class="btn primary" data-a="bisave">${ic('check', 16)} Save verification</button>`}`)); }
+  if (m.type === 'closecase2') return wrap('Close this case?', `<p style="margin:0">Closing <b>${esc(fullName(c))}</b> (${c.id}) stops follow-up reminders and removes it from work queues. You can reopen it from the status menu.</p>${inp('cc2r', 'Reason', { req: 1, err: e.r, opts: CLOSE_REASONS })}${inp('cc2n', 'Note', { area: 1, opt: 1, h: 80 })}`, `${cancel}<button class="btn danger" data-a="closecase2save">Close case</button>`);
+  if (m.type === 'bulkfu') { const n = S.csel.size; return wrap(`Set follow-up for ${n} ${n === 1 ? 'case' : 'cases'}`, `<div class="seg lite">${[['Tomorrow', 1], ['In 3 days', 3], ['Next week', 7], ['In 2 weeks', 14]].map(([l, d]) => `<button data-a="fuquick" data-v="${d}">${l}</button>`).join('')}</div>${inp('bfudate', 'Follow-up date', { type: 'date', req: 1, err: e.d, w: 220, v: S.fuPick || '' })}${inp('bfunote', 'Reason', { opt: 1, phText: 'Shown in each case audit trail' })}`, `${cancel}<button class="btn primary" data-a="bulkfusave">Set follow-up</button>`); }
+  if (m.type === 'orgnew') { const k = m.id || 'carriers'; const noun = { carriers: 'carrier', pbms: 'PBM', pharmacies: 'pharmacy' }[k];
+    return wide(wrap(`Add ${noun}`, `<div class="polgrid">${inp('onname', 'Name', { req: 1, err: e.name, span: 1 })}${inp('ontype', 'Type', { opts: k === 'carriers' ? ['Commercial', 'Medicare', 'Medicaid'] : k === 'pbms' ? ['Pharmacy benefit manager'] : ['Specialty pharmacy', 'Retail pharmacy', 'Mail order'], ph: false })}${inp('onphone', 'Phone', { req: 1, err: e.phone })}${inp('onst', 'Street address', { span: 1 })}${inp('oncity', 'City, state, zip', { span: 1 })}${inp('onfax', k === 'pharmacies' ? 'Fax' : 'PA fax', { req: 1, err: e.fax })}</div>`, `${cancel}<button class="btn primary" data-a="orgnewsave" data-v="${k}">Add ${noun}</button>`)); }
+  if (m.type === 'deact') { const [kind, id] = m.id.split(':'); const o = kind === 'fac' ? FACILITIES.find(x => x.id === id) : CARRIERS.concat(PBMS, PHARMACIES).find(x => x.id === id); const on = o.status !== 'Inactive';
+    const n = kind === 'fac' ? CASES.filter(c => c.facility === o.name && !['Closed', 'Complete'].includes(c.caseStatus)).length : casesFor(o.name).filter(c => !['Closed', 'Complete'].includes(c.caseStatus)).length;
+    return wrap(on ? `Deactivate ${esc(o.name)}?` : `Reactivate ${esc(o.name)}?`, on ? `<p style="margin:0">It will no longer appear in pickers for new cases.${n ? ` <b>${n} open ${n === 1 ? 'case stays' : 'cases stay'}</b> linked and unchanged.` : ''}</p>${inp('deactr', 'Reason', { req: 1, err: e.r, opts: ['No longer in network', 'Merged with another organization', 'Duplicate record', 'Closed'] })}` : `<p style="margin:0">It becomes available again in pickers for new cases.</p>`, `${cancel}<button class="btn ${on ? 'danger' : 'primary'}" data-a="deactsave" data-id="${m.id}">${on ? 'Deactivate' : 'Reactivate'}</button>`); }
+  if (m.type === 'facnew') return wide(wrap('Add medical facility', `<div class="polgrid">${inp('fnname', 'Facility name', { req: 1, err: e.name, span: 1 })}${inp('fntype', 'Facility type', { opts: [...new Set(FAC_TYPES)], ph: false })}${inp('fnnpi', 'NPI', { req: 1, err: e.npi })}${inp('fnst', 'Street address', { req: 1, err: e.st, span: 1 })}${inp('fncity', 'City, state, zip', { req: 1, err: e.city })}${inp('fnphone', 'Phone', { req: 1, err: e.phone })}${inp('fnfax', 'Fax', { opt: 1 })}${inp('fntax', 'Tax ID', { opt: 1 })}${inp('fncontact', 'Primary contact', { opt: 1, span: 1 })}</div>`, `${cancel}<button class="btn primary" data-a="facnewsave">Add facility</button>`));
+  if (m.type === 'usernew') { const kind = m.id || 'fac'; const facs = kind === 'fac' ? (S.route === 'facility' ? null : FACILITIES.map(f => f.name)) : kind === 'pharm' ? PHARMACIES.map(p => p.name) : null;
+    return wide(wrap(kind === 'hub' ? 'Add hub user' : 'Add user', `<div class="polgrid">${inp('unname', 'Full name', { req: 1, err: e.name })}${inp('unemail', 'Email', { req: 1, err: e.email, type: 'email' })}${inp('unrole', 'Role', { req: 1, err: e.role, opts: USER_ROLES[kind], v: S.unRole })}${S.unRole === 'Prescriber' ? inp('unnpi', 'NPI', { req: 1, err: e.npi }) : inp('unphone', 'Phone', { opt: 1 })}${facs ? inp('unorg', kind === 'pharm' ? 'Pharmacy' : 'Facility', { req: 1, err: e.org, opts: facs, span: 1 }) : ''}</div>${chk('uninvite', 'Email an invite to set a password', true)}`, `${cancel}<button class="btn primary" data-a="usernewsave" data-v="${kind}">Add user</button>`)); }
+  if (m.type === 'pwreset' || m.type === 'reinvite') { const u = findUser(m.id); return wrap(m.type === 'pwreset' ? 'Send password reset?' : 'Resend invite?', `<p style="margin:0">${m.type === 'pwreset' ? 'A reset link goes to' : 'A new invite link goes to'} <b>${esc(u.email)}</b>. ${m.type === 'pwreset' ? 'The link works for 24 hours and signs them out of other sessions.' : 'The previous invite link stops working.'}</p>`, `${cancel}<button class="btn primary" data-a="usermail" data-v="${m.type}" data-id="${esc(m.id)}">${ic('mail', 16)} Send email</button>`); }
+  if (m.type === 'userrm') { const u = findUser(m.id); return wrap(`Remove ${esc(u.name)}?`, `<p style="margin:0">They lose access right away. Cases and notes they worked on keep their name in the audit trail.</p>`, `${cancel}<button class="btn danger" data-a="userrmsave" data-id="${esc(m.id)}">Remove user</button>`); }
+  if (m.type === 'locnew') return wide(wrap('Add location', `<div class="polgrid">${inp('lnname', 'Location name', { req: 1, err: e.name, span: 1 })}${inp('lnst', 'Street address', { req: 1, err: e.st, span: 1 })}${inp('lncity', 'City, state, zip', { req: 1, err: e.city })}${inp('lnphone', 'Phone', { req: 1, err: e.phone })}${inp('lnfax', 'Fax', { opt: 1, help: 'Needed to fax PA forms to this location' })}${inp('lnnpi', 'NPI', { opt: 1 })}</div>`, `${cancel}<button class="btn primary" data-a="locnewsave">Add location</button>`));
+  if (m.type === 'printlist') { const x = S.printData; return wide(wrap(`Expiring ${x.kind === 'Authorization' ? 'authorizations' : 'benefits'} · ${esc(x.name)}`, `<div class="printable"><div class="phead"><b>HealthPacer · eMAXHealth Patient Services</b><span>Printed ${fmt(TODAY)} by ${ME}</span></div><h3 style="margin:8px 0">${esc(x.name)}</h3><p class="muted" style="margin:0 0 10px;font-size:13px">Patients whose ${x.kind === 'Authorization' ? 'prior authorization' : 'benefit verification'} ends soon. Please send updated information through the provider portal or by fax to 1 (800) 555-0199.</p>
+      <table class="dt"><thead><tr><th>Patient</th><th>DOB</th><th>Case</th><th>Payer</th><th>Expires</th></tr></thead><tbody>${x.list.map(e2 => `<tr><td class="strong">${esc(fullName(e2.c))}</td><td class="num">${fmt(e2.c.dob)}</td><td class="num">${e2.c.id}</td><td>${esc(e2.c.payer)}</td><td class="num">${fmt(e2.exp)}</td></tr>`).join('')}</tbody></table></div>`, `${cancel}<button class="btn primary" data-a="doprint">Print</button>`), 'wide printmodal'); }
+  if (m.type === 'aenew') return wide(wrap('Record adverse event', `<div class="note-banner">${ic('info', 16)}<span>Report within 24 hours of awareness. The safety team is notified when you submit.</span></div><div class="polgrid">${inp('aecase', 'Case', { req: 1, err: e.case, opts: CASES.slice(0, 20).map(x => `${x.id} · ${fullName(x)}`) })}${inp('aedate', 'Date of awareness', { type: 'date', v: '2026-09-24', req: 1 })}${inp('aesev', 'Seriousness', { opts: ['Non-serious', 'Serious', 'Serious, hospitalization'], ph: false })}${inp('aesrc', 'Reported by', { opts: ['Patient', 'Caregiver', 'Prescriber', 'Pharmacy'], ph: false })}</div>${inp('aedesc', 'What happened', { area: 1, h: 100, req: 1, err: e.desc, phText: 'Describe the event, onset and any action taken' })}`, `${cancel}<button class="btn danger" data-a="aesave">Submit AE</button>`));
+  if (m.type === 'orgpolicy') return '';
+  return _xm2(m, wrap);
+};
+
+/* ---------- Pagination state ---------- */
+S.pg = {};
+const pagerX = (pid, n, noun) => { const pages = Math.max(1, Math.ceil(n / 25)); const p = Math.min(S.pg[pid] || 1, pages); return `<div class="pager num"><span>${n ? `${(p - 1) * 25 + 1} to ${Math.min(p * 25, n)} of ${n} ${noun}` : `0 ${noun}`}</span><span class="sp"></span><button class="btn sm ghost" data-a="pgo" data-p="${pid}" data-v="${p - 1}" ${p <= 1 ? 'disabled' : ''}>${ic('chevl', 14)} Previous</button><span>Page ${p} of ${pages}</span><button class="btn sm ghost" data-a="pgo" data-p="${pid}" data-v="${p + 1}" ${p >= pages ? 'disabled' : ''}>Next ${ic('chevr', 14)}</button></div>`; };
+const pageSlice = (pid, rows) => { const pages = Math.max(1, Math.ceil(rows.length / 25)); const p = Math.min(S.pg[pid] || 1, pages); return rows.slice((p - 1) * 25, p * 25); };
+
+/* ---------- Notifications ---------- */
+const NOTIFS = [
+  { id: 'n1', icon: 'alert', t: 'Appeal 2 packet is ready to fax', s: 'Johnson, Rachel · E100304', when: '12 min ago', act: 'case', ref: 'E100304', unread: true },
+  { id: 'n2', icon: 'chat', t: 'Dr. Kasa Mahale replied', s: 'Updated labs attached for the second appeal', when: '1 hr ago', act: 'case', ref: 'E100304', tab: 'messages', unread: true },
+  { id: 'n3', icon: 'fax', t: '2 faxes failed to send', s: 'Fax Transmissions', when: '3 hr ago', act: 'go', ref: 'fax', unread: true },
+  { id: 'n4', icon: 'userplus', t: 'New account request', s: 'Hollywood Doctors · office staff', when: 'Yesterday', act: 'go', ref: 'acct', unread: false },
+  { id: 'n5', icon: 'users', t: '3 cases reassigned to you', s: 'By Sarah Mitchell · workload balancing', when: 'Yesterday', act: 'go', ref: 'cases', unread: false }
+];
+function notifPop() {
+  const n = NOTIFS.filter(x => x.unread).length;
+  return `<div class="menu-pop notifpop" role="dialog" aria-label="Notifications"><div class="np-h"><b>Notifications</b>${n ? `<button class="link-btn" data-a="notifall">Mark all read</button>` : '<span class="muted" style="font-size:12px">All caught up</span>'}</div>${NOTIFS.map(x => `<button class="np-i ${x.unread ? 'unread' : ''}" data-a="notifopen" data-v="${x.id}"><span class="np-ic">${ic(x.icon, 16)}</span><span class="np-t"><b>${esc(x.t)}</b><span>${esc(x.s)}</span></span><span class="np-w">${x.when}</span></button>`).join('')}</div>`;
+}
+const _util0 = util;
+util = function () {
+  const n = NOTIFS.filter(x => x.unread).length;
+  return _util0().replace(/<button class="iconbtn" aria-label="Notifications" data-a="toast" data-v="3 new notifications">([\s\S]*?)<span class="dot"><\/span><\/button>/, (m, icn) => `<div class="notifwrap"><button class="iconbtn" aria-label="Notifications${n ? `, ${n} unread` : ''}" data-a="menu" data-v="notif" aria-expanded="${S.menu === 'notif'}">${icn}${n ? `<span class="dot"></span>` : ''}</button>${S.menu === 'notif' ? notifPop() : ''}</div>`);
+};
+
+/* ---------- Actions ---------- */
+function flash(key) { S.flash = key; clearTimeout(flash.t); flash.t = setTimeout(() => { S.flash = null; }, 1600); }
+function docFromRow(i) { const d = DOCS[i]; return { name: d[0], type: d[1], date: d[2], by: d[3], size: d[4], di: i, pages: /packet|appeal/i.test(d[0]) ? 6 : 2 }; }
+Object.assign(EXTRA, {
+  edit(t) { S.drawer = { type: 'edit', id: t.dataset.v }; },
+  useredit(t) { S.drawer = { type: 'edit', id: 'user', ref: t.dataset.v }; S.pop = null; },
+  editsave(t) {
+    const d = S.drawer, E = EDITS[d.id], tgt = editTarget(d), fs = E.fields(tgt), v = {}, err = {};
+    fs.forEach(([k, l, o]) => { v[k] = val('ed-' + k); if (o.req && !v[k]) err[k] = `${l} is required`; });
+    if (Object.keys(err).length) { d.err = err; return; }
+    E.save(tgt, v); if (E.area) auditLog(E.area, E.title.replace('Edit ', '').replace(/^./, x => x.toUpperCase()) + ' updated', 'Edited in side panel');
+    S.drawer = null; toast(`${E.title.replace('Edit ', '').replace(/^./, x => x.toUpperCase())} saved`);
+  },
+  docopen(t) { if (t.dataset.i != null) openDoc(docFromRow(+t.dataset.i)); else openDoc({ name: t.dataset.v, type: t.dataset.type || (/fax|cover/i.test(t.dataset.v) ? 'Fax' : /appeal/i.test(t.dataset.v) ? 'Appeal' : /PA_/i.test(t.dataset.v) ? 'Prior authorization' : 'Document'), date: t.dataset.date, pages: +(t.dataset.pages || 2), src: t.dataset.src }); },
+  docpg(t) { const d = S.drawer; d.page = Math.max(1, Math.min(d.doc.pages || 2, (d.page || 1) + +t.dataset.v)); },
+  doczoom(t) { const d = S.drawer; d.zoom = Math.round(Math.max(.8, Math.min(1.4, (d.zoom || 1) + .2 * +t.dataset.v)) * 10) / 10; },
+  docdl(t) { if (t.dataset.i != null) { const d = docFromRow(+t.dataset.i); downloadDoc(d.name, d); } else downloadDoc(S.drawer.doc.name, S.drawer.doc); S.pop = null; toast('Preparing download'); },
+  docprint() { document.body.classList.add('print-doc'); setTimeout(() => { window.print(); document.body.classList.remove('print-doc'); }, 60); },
+  docfax() { const di = S.drawer.doc.di; S.drawer = null; S.faxDocs = new Set(di != null ? [di] : []); S.modal = { type: 'sendfax' }; if (S.route === 'case') S.tab = 'faxes'; },
+  docshare(t) { const i = +t.dataset.id, k = +t.dataset.v, d = DOCS[i]; d[k] = !d[k]; const who = k === 5 ? 'provider' : 'pharmacy'; auditLog('Documents', d[k] ? `Document shared with ${who}` : `Document no longer shared with ${who}`, d[0]); toast(d[k] ? `Shared with ${who}` : `No longer shared with ${who}`); },
+  docpick(t) { S.pickName = t.files && t.files[0] ? t.files[0].name : null; },
+  adddocsave(t) {
+    const fac = t.dataset.v === 'fac'; const name = val('docname') || S.pickName, type = val('doctype'); const err = {};
+    if (!name) err.file = 1; if (!type) err.type = 'Choose a type';
+    if (Object.keys(err).length) { S.modal.err = err; return; }
+    if (fac) { const f = FACILITIES.find(x => x.id === S.detail.facility) || FACILITIES[0]; f.docs.unshift([name, type, fmt(TODAY)]); }
+    else { DOCS.unshift([name, type, fmt(TODAY), ME, S.pickSize || '1.2 MB', val('docpv'), val('docph')]); auditLog('Documents', 'Document added', name); flash('doc0'); S.docq = ''; }
+    S.modal = null; S.pickName = null; toast('Document added');
+  },
+  docrenamesave(t) { const i = +t.dataset.id, n = val('rnname'); if (!n) { S.modal.err = { name: 'Enter a name' }; return; } DOCS[i][0] = n; DOCS[i][1] = val('rntype'); S.modal = null; flash('doc' + i); toast('Document updated'); },
+  docrmsave(t) { const d = DOCS.splice(+t.dataset.id, 1)[0]; auditLog('Documents', 'Document removed', d[0]); S.modal = null; toast('Document removed'); },
+  msgsend() {
+    const v = val('newmsg'), to = val('msgto'); S.msgTo = to;
+    if (!v) { S.msgErr = true; return; }
+    MESSAGES.unshift([ME, 'Hub', nowStamp(), v, [to === 'To provider' ? 'Shared with provider' : to === 'To pharmacy' ? 'Shared with pharmacy' : 'Internal']]);
+    S.msgErr = false; S.msgDraft = ''; flash('msg0'); auditLog('Messages', to === 'Internal note' ? 'Internal message added' : 'Message sent ' + to.toLowerCase(), v.slice(0, 60));
+    toast(to === 'Internal note' ? 'Internal message saved' : `Message sent ${to.toLowerCase()}`);
+    const el = document.getElementById('newmsg'); if (el) el.value = '';
+  },
+  msgreply(t) { const m = MESSAGES[+t.dataset.i]; S.msgTo = m[1] === 'Pharmacy' ? 'To pharmacy' : m[1] === 'HCP' ? 'To provider' : 'Internal note'; S.pop = null; S.msgDraft = `Re: ${m[0]}. `; scrollTo({ top: 0, behavior: 'smooth' }); setTimeout(() => { const el = document.getElementById('newmsg'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 80); },
+  msgrmsave(t) { MESSAGES.splice(+t.dataset.id, 1); S.modal = null; toast('Message deleted'); },
+  casenotehl(t) { const nt = NOTES[+t.dataset.i]; nt[4] = !nt[4]; S.pop = null; flash('note' + t.dataset.i); toast(nt[4] ? 'Note highlighted' : 'Highlight removed'); },
+  casenotesave(t) {
+    const text = val('cntext'), hl = val('cnhl'); if (!text) { S.modal.err = { text: 'Write the note first' }; return; }
+    if (t.dataset.id !== '') { const nt = NOTES[+t.dataset.id]; nt[3] = text; nt[4] = hl; flash('note' + t.dataset.id); }
+    else { NOTES.unshift([ME, 'Note', nowStamp(), text, hl]); flash('note0'); auditLog('Notes', 'Note added', text.slice(0, 60)); }
+    S.modal = null; toast('Note saved');
+  },
+  casenotermsave(t) { NOTES.splice(+t.dataset.id, 1); S.modal = null; toast('Note removed'); },
+  calldir(t) { S.callDir = t.dataset.v; },
+  logcallsave() {
+    const who = val('clwho'), out = val('clout'), note = val('clnote'), fu = val('clfu'), err = {};
+    if (!who) err.who = 'Choose who you spoke with'; if (!out) err.out = 'Choose an outcome'; if (!note) err.note = 'Add a short summary';
+    if (Object.keys(err).length) { S.modal.err = err; return; }
+    const c = byId(S.caseId); const dir = S.callDir || 'Outbound';
+    NOTES.unshift([ME, 'Phone log', nowStamp(), `${dir === 'Outbound' ? 'Called' : 'Call from'} ${who}, ${val('clnum')}. ${out}, ${val('clmin') || 0} min. ${note}`, val('clhl')]);
+    if (fu) { const [y, m, d] = fu.split('-').map(Number); c.follow = new Date(y, m - 1, d); }
+    auditLog('Notes', 'Phone log added', `${out}: ${who}`); flash('note0'); S.modal = null; toast(fu ? 'Call saved. Follow-up date updated' : 'Call saved');
+  },
+  faxopen(t) { const f = FAXES[+t.dataset.i]; openDoc({ name: `Fax_${f[0].split(' ')[0].replace(/\//g, '-')}_${f[2].replace(/\W+/g, '_')}.pdf`, type: `${f[1]} fax`, date: f[0], pages: f[4], src: `${f[1] === 'Outbound' ? 'Sent to' : 'Received from'} ${f[2]} · ${f[3]} · ${f[5]}` }); },
+  faxdoc(t) { const i = +t.dataset.i; S.faxDocs.has(i) ? S.faxDocs.delete(i) : S.faxDocs.add(i); S.faxTo = val('fxto'); S.faxNum = val('fxnum'); S.faxCase = val('fxcase'); const er = S.modal.err; if (er) { if (S.faxDocs.size) delete er.docs; if (S.faxTo) delete er.to; if (S.faxNum) delete er.num; if (S.faxCase) delete er.case; } },
+  sendfaxsave() {
+    const to = val('fxto'), num = val('fxnum'), cs = S.route !== 'case' ? val('fxcase') : S.caseId, err = {};
+    if (!to) err.to = 'Choose a recipient'; if (!num) err.num = 'Enter a fax number'; if (!S.faxDocs.size) err.docs = 1; if (!cs) err.case = 'Choose a case';
+    if (Object.keys(err).length) { S.faxTo = to; S.faxNum = num; S.modal.err = err; return; }
+    const pages = [...S.faxDocs].reduce((n, i) => n + (/packet|appeal/i.test(DOCS[i][0]) ? 6 : 2), val('fxcover') ? 1 : 0);
+    const who = to.replace(/ \(.*\)$/, '') === 'Other number' ? 'Manual recipient' : to.replace(/ \(.*\)$/, '');
+    FAXES.unshift([nowStamp(), 'Outbound', who, num, pages, 'Sending']);
+    const caseId = String(cs).split(' ')[0];
+    FAXLOG.unshift({ id: uid('FX'), date: new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate(), new Date().getHours(), new Date().getMinutes()), dir: 'Outbound', who, kind: (to.match(/\((.*)\)/) || [])[1] || 'Other', num, type: 'Case document', caseId, job: String(885000 + Math.floor(Math.random() * 999)), pages, status: 'Sending', error: '' });
+    auditLog('Faxes', `Fax sent to ${who}`, `${pages} pages`); flash('fax0'); S.modal = null; S.faxDocs = null; S.faxTo = S.faxNum = S.faxCase = null; toast(`Fax sending to ${who}`);
+    setTimeout(() => { if (FAXES[0] && FAXES[0][5] === 'Sending') { FAXES[0][5] = 'Delivered'; if (FAXLOG[0].status === 'Sending') FAXLOG[0].status = 'Delivered'; render(); } }, 4000);
+  },
+  plansave(t) {
+    const c = byId(S.caseId), I = info(c); const v = { order: val('plorder'), name: val('plname'), type: val('pltype'), member: val('plmember'), group: val('plgroup'), bin: val('plbin'), eff: `${usOf(val('plfrom'))} to ${usOf(val('plto'))}` }; const err = {};
+    if (!v.order) err.order = 'Choose an order'; if (!v.name) err.name = 'Choose a plan'; if (!v.member) err.member = 'Enter the member ID';
+    if (Object.keys(err).length) { S.modal.err = err; return; }
+    if (t.dataset.id !== '') { Object.assign(I.plans[+t.dataset.id], v); flash('plan' + t.dataset.id); } else { I.plans.push({ ...v, cov: 'Pending' }); flash('plan' + (I.plans.length - 1)); }
+    auditLog('Benefits', t.dataset.id !== '' ? 'Plan updated' : 'Plan added', v.name); S.modal = null; toast(t.dataset.id !== '' ? 'Plan saved' : 'Plan added');
+  },
+  planrm(t) { const I = info(byId(S.caseId)); const p = I.plans.splice(+t.dataset.id, 1)[0]; auditLog('Benefits', 'Plan removed', p.name); S.modal = null; toast('Plan removed'); },
+  bistep(t) {
+    const dir = +t.dataset.v, st = S.modal.step || 0, b = S.bi = S.bi || {};
+    const grab = { 0: ['plan:biplan', 'method:bimethod', 'rep:birep', 'ref:biref'], 1: ['ded:bided', 'oop:bioop', 'copay:bicopay', 'ql:biql', 'pa:bipa', 'step:bistep'], 2: ['cov:bicov', 'note:binote'] }[st];
+    grab.forEach(x => { const [k, id] = x.split(':'); b[k] = val(id); });
+    if (dir > 0 && st === 0) { const err = {}; if (!b.plan) err.plan = 'Choose a plan'; if (!b.ref) err.ref = 'Enter the reference number from the call or portal'; if (Object.keys(err).length) { S.modal.err = err; return; } }
+    S.modal = { type: 'bi', step: Math.max(0, Math.min(2, st + dir)) };
+  },
+  bisave() {
+    const b = S.bi; b.cov = val('bicov'); b.note = val('binote'); if (!b.cov) { S.modal.err = { cov: 'Choose the coverage outcome' }; return; }
+    const c = byId(S.caseId), I = info(c);
+    Object.assign(I.bi, { date: fmt(TODAY), by: ME, ded: b.ded, oop: b.oop, copay: b.copay, pa: b.pa, step: b.step, ql: b.ql, ref: b.ref });
+    const p = I.plans.find(x => x.name === b.plan); if (p) p.cov = b.cov; if (p === I.plans[0]) c.coverage = b.cov;
+    I.covnotes.unshift([fmt(TODAY), ME, `Re-verified ${b.plan} by ${b.method.toLowerCase()}. Reference #${b.ref}${b.rep ? '. Rep: ' + b.rep : ''}.${b.note ? ' ' + b.note : ''}`]);
+    auditLog('Benefits', 'Benefits re-verified', `${b.plan}: ${b.cov}`); S.bi = null; S.modal = null; toast('Benefits verified');
+  },
+  audr(t) { S.audr = t.dataset.v; S.menu = null; },
+  audcsv() { downloadCsv(`${S.caseId}_audit_trail.csv`, ['When', 'User', 'Area', 'Action', 'Details'], AUDIT); toast('Audit trail exported'); },
+  closecase2save() { const r = val('cc2r'); if (!r) { S.modal.err = { r: 'Choose a reason' }; return; } const c = byId(S.caseId); const was = c.caseStatus; c.caseStatus = 'Closed'; c.follow = null; auditLog('Case', 'Case closed', `${was} to Closed: ${r}`); S.modal = null; toast(`Case closed: ${r}`); },
+  refreshcase() { S.menu = null; S.refreshing = true; setTimeout(() => { S.refreshing = false; byId(S.caseId).updated = TODAY; toast('Case refreshed. Everything is up to date'); render(); }, 900); },
+  fuquick(t) { S.fuPick = isoOf(fmt(addDays(TODAY, +t.dataset.v))); const el = document.getElementById('bfudate'); if (el) el.value = S.fuPick; },
+  bulkfusave() { const d = val('bfudate'); if (!d) { S.modal.err = { d: 'Pick a date' }; return; } const [y, m, dd] = d.split('-').map(Number); const n = S.csel.size; S.csel.forEach(id => { byId(id).follow = new Date(y, m - 1, dd); }); S.modal = null; S.fuPick = null; toast(`Follow-up set to ${usOf(d)} on ${n} ${n === 1 ? 'case' : 'cases'}`); },
+  exportcases() { const list = filtered(); downloadCsv('cases.csv', ['Case ID', 'Patient', 'DOB', 'Prescriber', 'Facility', 'Follow-up', 'Case status', 'Coverage', 'Authorization', 'PAP', 'Assigned to'], list.map(c => [c.id, fullName(c), fmt(c.dob), c.prescriber, c.facility, fmt(c.follow), c.caseStatus, c.coverage, c.ar, c.pap, c.owner])); toast(`Exported ${list.length} cases`); },
+  pgo(t) { S.pg[t.dataset.p] = +t.dataset.v; scrollTo({ top: 0, behavior: 'smooth' }); },
+  notifall() { NOTIFS.forEach(x => x.unread = false); S.menu = 'notif'; },
+  notifopen(t) { const x = NOTIFS.find(n => n.id === t.dataset.v); x.unread = false; S.menu = null; if (x.act === 'case') { openCase(x.ref); if (x.tab) S.tab = x.tab; } else go(x.ref); },
+  orgnew(t) { S.modal = { type: 'orgnew', id: t.dataset.v, ret: S.modal && S.modal.type === 'policy' ? S.modal : null }; },
+  orgnewsave(t) {
+    const k = t.dataset.v, v = { name: val('onname'), type: val('ontype'), phone: val('onphone'), st: val('onst'), city: val('oncity'), fax: val('onfax') }, err = {};
+    if (!v.name) err.name = 'Enter a name'; if (!v.phone) err.phone = 'Enter a phone number'; if (!v.fax) err.fax = 'Enter a fax number';
+    if (Object.keys(err).length) { S.modal.err = err; return; }
+    const list = k === 'pbms' ? PBMS : k === 'pharmacies' ? PHARMACIES : CARRIERS; const o = { id: (k === 'pbms' ? 'PB' : k === 'pharmacies' ? 'PH' : 'CR') + (list.length + 1), ...v, status: 'Active' }; list.push(o);
+    const ret = S.modal.ret; S.modal = ret || null;
+    if (ret) { S.ik.pendingCarrier = o.name; toast(`${o.name} added and selected`); }
+    else { S.detail.org = o.id; S.detail.cstat = 'Open'; S.route = k === 'pbms' ? 'pbm' : k === 'pharmacies' ? 'pharmacy' : 'carrier'; toast(`${o.name} added`); }
+  },
+  deactsave(t) {
+    const [kind, id] = t.dataset.id.split(':'); const o = kind === 'fac' ? FACILITIES.find(x => x.id === id) : CARRIERS.concat(PBMS, PHARMACIES).find(x => x.id === id);
+    if (o.status !== 'Inactive') { const r = val('deactr'); if (!r) { S.modal.err = { r: 'Choose a reason' }; return; } o.status = 'Inactive'; toast(`${o.name} deactivated`); } else { o.status = 'Active'; toast(`${o.name} reactivated`); }
+    S.modal = null;
+  },
+  facnewsave() {
+    const v = { name: val('fnname'), type: val('fntype'), npi: val('fnnpi'), st: val('fnst'), city: val('fncity'), phone: val('fnphone'), fax: val('fnfax'), tax: val('fntax'), contact: val('fncontact') }, err = {};
+    ['name', 'npi', 'st', 'city', 'phone'].forEach(k => { if (!v[k]) err[k] = 'Required'; });
+    if (Object.keys(err).length) { S.modal.err = err; return; }
+    const loc = { name: v.name, st: v.st, city: v.city, phone: v.phone, fax: v.fax, npi: v.npi, tax: v.tax };
+    const f = { id: 'MF' + (FACILITIES.length + 1), name: v.name, type: v.type, contact: v.contact || 'Not set', phone: v.phone, fax: v.fax || 'None', npi: v.npi, tax: v.tax || 'Not set', locs: [loc], users: [], pinned: false, status: 'Active', notes: [], docs: [] };
+    FACILITIES.push(f); LOCATIONS.push({ ...loc, fac: f }); S.modal = null; S.detail.facility = f.id; S.tab2.facility = 'users'; S.route = 'facility'; toast(`${f.name} added`);
+  },
+  unrole(t) { },
+  usernewsave(t) {
+    const kind = t.dataset.v, v = { name: val('unname'), email: val('unemail'), role: val('unrole'), npi: val('unnpi'), org: val('unorg') }, err = {};
+    if (!v.name) err.name = 'Enter a name'; if (!/.+@.+\..+/.test(v.email)) err.email = 'Enter a valid email'; if (!v.role) err.role = 'Choose a role'; if (v.role === 'Prescriber' && document.getElementById('unnpi') && !v.npi) err.npi = 'Prescribers need an NPI';
+    if (document.getElementById('unorg') && !v.org) err.org = 'Choose one';
+    if (Object.keys(err).length) { S.unRole = v.role; S.modal.err = err; return; }
+    const inv = val('uninvite'); const u = { name: v.name, email: v.email, role: v.role, status: inv ? 'Invite pending' : 'Active', kind, added: fmt(TODAY) };
+    if (kind === 'fac') { const f = S.route === 'facility' ? (FACILITIES.find(x => x.id === S.detail.facility) || FACILITIES[0]) : FACILITIES.find(x => x.name === v.org); f.users.push(u); if (v.role === 'Prescriber') PRESCRIBERS.push([v.name, f.name]); }
+    else if (kind === 'pharm') { u.org = v.org; u.ref = uid('PU'); PUSERS.push(u); }
+    else { u.ref = uid('HU'); u.last = 'Never'; HUBUSERS.push(u); }
+    S.modal = null; S.unRole = null; toast(inv ? `${v.name} added. Invite sent to ${v.email}` : `${v.name} added`);
+  },
+  usermail(t) { const u = findUser(t.dataset.id); S.modal = null; toast(t.dataset.v === 'pwreset' ? `Password reset sent to ${u.email}` : `Invite sent again to ${u.email}`); },
+  userrmsave(t) { const u = findUser(t.dataset.id); if (u.fac) u.fac.users.splice(u.fac.users.indexOf(u), 1); else { const L = u.kind === 'pharm' ? PUSERS : HUBUSERS; L.splice(L.indexOf(u), 1); } S.modal = null; toast(`${u.name} removed`); },
+  locnewsave() {
+    const v = { name: val('lnname'), st: val('lnst'), city: val('lncity'), phone: val('lnphone'), fax: val('lnfax'), npi: val('lnnpi') }, err = {};
+    ['name', 'st', 'city', 'phone'].forEach(k => { if (!v[k]) err[k] = 'Required'; }); if (Object.keys(err).length) { S.modal.err = err; return; }
+    const f = FACILITIES.find(x => x.id === S.detail.facility) || FACILITIES[0]; const l = { ...v, npi: v.npi || f.npi, tax: f.tax }; f.locs.push(l); LOCATIONS.push({ ...l, fac: f }); S.modal = null; toast('Location added');
+  },
+  printlist(t) { const kind = t.dataset.k; const rows = EXPIRING.filter(e => e.kind === kind && e.c.facility === t.dataset.v); S.printData = { kind, name: t.dataset.v, list: rows }; S.modal = { type: 'printlist', id: t.dataset.v }; },
+  doprint() { document.body.classList.add('print-list'); setTimeout(() => { window.print(); document.body.classList.remove('print-list'); }, 60); },
+  aesave() {
+    const cs = val('aecase'), d = val('aedesc'), err = {}; if (!cs) err.case = 'Choose a case'; if (!d) err.desc = 'Describe what happened';
+    if (Object.keys(err).length) { S.modal.err = err; return; }
+    AES.unshift({ id: 'AE-' + (2031 + AES.length), c: byId(cs.split(' ')[0]), date: usOf(val('aedate')), sev: val('aesev'), src: val('aesrc'), status: 'Submitted', by: ME, desc: d, due: fmt(addDays(TODAY, 1)) });
+    S.modal = null; toast('Adverse event submitted to the safety team');
+  },
+  gonew() { EXTRA.newcase(); },
+  settings(t) { S.menu = null; go('settings'); }
+});
+document.addEventListener('input', (e) => {
+  const k = e.target.dataset.in;
+  if (k === 'docq') { S.docq = e.target.value; render(); }
+  if (k === 'audq') { S.audq = e.target.value; render(); }
+  if (k === 'setq') { S.setq = e.target.value; }
+  if (e.target.id === 'newmsg') { S.msgDraft = e.target.value; if (S.msgErr && e.target.value) { S.msgErr = false; render(); } }
+  if (k === 'pq' || k === 'q') { S.pg[k === 'q' ? 'cases' : e.target.dataset.p] = 1; }
+});
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'msgto') { S.msgTo = e.target.value; render(); }
+  if (e.target.id === 'unrole') { S.unRole = e.target.value; render(); }
+  if (e.target.id === 'fxto') { const b = FAX_BOOK().find(x => `${x[0]} (${x[1]})` === e.target.value); S.faxTo = e.target.value; S.faxNum = b ? b[2] : ''; const n = document.getElementById('fxnum'); if (n) { n.value = S.faxNum; if (!b) n.focus(); } }
+  if (e.target.dataset.set) { SETTINGS[e.target.dataset.set] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; toast('Setting saved'); render(); }
+  if (e.target.id === 'docfile') { const f = e.target.files && e.target.files[0]; S.pickName = f ? f.name : null; S.pickSize = f ? (f.size > 1e6 ? (f.size / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(f.size / 1000)) + ' KB') : null; render(); }
+});
+const _afterRender1 = afterRender;
+afterRender = function () {
+  _afterRender1();
+  if (S.ik && S.ik.pendingCarrier) { const el = document.getElementById('pol-carrier'); if (el) { if (![...el.options].some(o => o.value === S.ik.pendingCarrier)) el.add(new Option(S.ik.pendingCarrier, S.ik.pendingCarrier)); el.value = S.ik.pendingCarrier; S.ik.pendingCarrier = null; } }
+  document.querySelectorAll('.drawer [id^="ed-"], .modal [id]').forEach(el => { el.dataset.fresh = ''; delete el.dataset.fresh; });
+};
+
+/* Clear a field's error as soon as the person fixes it */
+['input', 'change'].forEach(ev => document.addEventListener(ev, (e) => {
+  const box = e.target.closest && e.target.closest('.modal .input.err, .drawer .input.err'); if (!box) return;
+  if (e.target.value === '' && e.target.type !== 'checkbox') return;
+  box.classList.remove('err'); const m = box.querySelector('.ikerr'); if (m) m.remove();
+  const err = (S.modal && S.modal.err) || (S.drawer && S.drawer.err); if (err && typeof err === 'object') { const k = Object.keys(err).find(k => e.target.id.endsWith(k)); if (k) delete err[k]; }
+}));
+/* ================= Round 5: pages that were planned for later ================= */
+const R13 = rng(913);
+const pk13 = (a) => a[Math.floor(R13() * a.length)];
+const PHARMACIES = [
+  ['Optime', 'Specialty pharmacy', '5000 Optime Way', 'Memphis, TN 38118', '1 (855) 555-0180', '1 (855) 555-0188'],
+  ['CarePath Specialty', 'Specialty pharmacy', '120 CarePath Blvd', 'Orlando, FL 32801', '1 (866) 555-0210', '1 (866) 555-0211'],
+  ['Meridian Rx', 'Mail order', '48 Meridian Court', 'Columbus, OH 43215', '1 (877) 555-0133', '1 (877) 555-0134']
+].map(([name, type, st, city, phone, fax], i) => ({ id: 'PH' + (i + 1), name, type, st, city, phone, fax, status: 'Active' }));
+const PUSERS = [['Dana Whitlock', 'Pharmacist', 'Optime'], ['Leo Park', 'Intake coordinator', 'Optime'], ['Mira Castillo', 'Pharmacy technician', 'CarePath Specialty'], ['Omar Haddad', 'Pharmacist', 'CarePath Specialty'], ['Beth Nguyen', 'Administrator', 'Meridian Rx'], ['Sam Ortiz', 'Intake coordinator', 'Meridian Rx']]
+  .map(([name, role, org], i) => ({ ref: 'PU' + (i + 1), kind: 'pharm', name, role, org, email: name.toLowerCase().replace(' ', '.') + '@' + org.toLowerCase().replace(/\W+/g, '') + '.example', status: i === 4 ? 'Invite pending' : 'Active', last: i === 4 ? 'Never' : fmt(addDays(TODAY, -(i * 2 + 1))) }));
+const HUBUSERS = [['Janet Mills', 'Patient access coordinator'], ['Sarah Mitchell', 'Patient access coordinator'], ['Marketta Howie', 'Case manager'], ['Devon Ruiz', 'Patient access coordinator'], ['Alicia Moreno', 'Supervisor'], ['Grant Pierce', 'Administrator'], ['Nina Shah', 'Read only']]
+  .map(([name, role], i) => ({ ref: 'HU' + (i + 1), kind: 'hub', name, role, email: name.toLowerCase().replace(' ', '.') + '@emaxhealth.example', status: i === 6 ? 'Invite pending' : 'Active', last: i === 6 ? 'Never' : i < 4 ? 'Today' : fmt(addDays(TODAY, -(i + 1))), cases: CASES.filter(c => c.owner === name).length }));
+const AE_DESC = ['Nausea and dizziness starting two days after dose increase', 'Headache and fatigue reported during follow-up call', 'Rash on forearms, resolved after antihistamine', 'Patient reported low energy and dizziness on standing', 'Missed doses for four days, then resumed; no symptoms reported'];
+const AES = Array.from({ length: 7 }, (_, i) => { const c = CASES[(i * 5 + 2) % CASES.length]; return { id: 'AE-' + (2024 + i), c, date: fmt(addDays(TODAY, -[0, 1, 3, 6, 11, 19, 30][i])), sev: i === 2 ? 'Serious' : i === 5 ? 'Serious, hospitalization' : 'Non-serious', src: pk13(['Patient', 'Caregiver', 'Prescriber', 'Pharmacy']), status: ['Draft', 'Submitted', 'Follow-up requested', 'Submitted', 'Closed', 'Closed', 'Closed'][i], by: pk13(TEAM), desc: AE_DESC[i % AE_DESC.length], due: fmt(addDays(TODAY, [1, 0, 2, -1, -5, -12, -24][i])) }; });
+const CONSENTS = CASES.filter((c, i) => i % 4 !== 3).slice(0, 16).map((c, i) => ({ c, exp: addDays(TODAY, [-4, 2, 5, 9, 12, 16, 20, 24, 28, 33, 39, 44, 50, 57, 63, 80][i]), via: pk13(['E-signature', 'Paper form', 'Verbal, recorded']), sent: i % 3 === 0 ? fmt(addDays(TODAY, -(i + 2))) : null }));
+const SETTINGS = { name: ME, email: 'janet.mills@emaxhealth.example', phone: '(615) 555-0142', landing: 'Dashboard', rows: '25', n_assign: true, n_msg: true, n_fax: true, n_expire: false, n_digest: true, ooo: false, delegate: 'Sarah Mitchell', sig: 'Janet Mills\nPatient Access Coordinator, eMAXHealth Patient Services' };
+
+const statusPill = (s) => pill(s === 'Active' ? 'Active' : s === 'Inactive' ? 'Closed' : 'Pending').replace('>Closed<', '>Inactive<').replace('>Pending<', `>${s}<`);
+const aeTone = { Draft: 't-neutral', Submitted: 't-info', 'Follow-up requested': 't-warn', Closed: 't-ok' };
+
+/* ---------- Adverse events ---------- */
+ROUTES_X.ae = () => listPage('ae', {
+  title: 'Adverse Events', sub: 'Report within 24 hours of awareness', noun: 'events', rows: AES, searchPh: 'Search AE number, patient, case',
+  head: `<button class="btn danger" data-a="modal" data-v="aenew">${ic('alert', 16)} Record adverse event</button>`,
+  filters: [{ key: 'status', label: 'Status', get: r => r.status, opts: ['Draft', 'Submitted', 'Follow-up requested', 'Closed'] }, { key: 'sev', label: 'Seriousness', get: r => r.sev, opts: ['Non-serious', 'Serious', 'Serious, hospitalization'] }, { key: 'src', label: 'Reported by', get: r => r.src }],
+  text: r => [r.id, fullName(r.c), r.c.id].join(' '),
+  cols: [
+    ['AE', '96px', r => `<span class="strong num">${r.id}</span>`],
+    ['Patient', 'auto', r => `<a href="#" data-a="case" data-id="${r.c.id}" class="strong pname">${esc(fullName(r.c))}</a><span class="sub num">${r.c.id}</span>`],
+    ['Aware', '110px', r => `<span class="num">${r.date}</span>`],
+    ['Seriousness', '190px', r => `<span class="pill ${r.sev === 'Non-serious' ? 't-neutral' : 't-danger'}">${r.sev}</span>`],
+    ['Reported by', '120px', r => r.src],
+    ['Status', '170px', r => `<span class="pill ${aeTone[r.status]}">${r.status}</span>`],
+    ['Due', '110px', r => r.status === 'Closed' ? '<span class="muted">Done</span>' : `<span class="num ${dayDiff(new Date(r.due)) < 0 ? 'overdue' : ''}">${r.due}</span>`]
+  ], opts: { rowAct: r => `data-a="drawer" data-v="ae" data-id="${r.id}"`, sel: r => S.drawer && S.drawer.id === r.id }
+});
+
+/* ---------- Expiring consents ---------- */
+ROUTES_X.expcon = () => listPage('expcon', {
+  title: 'Expiring Consents', sub: 'Patient consents ending in the next 90 days', noun: 'patients', rows: CONSENTS, searchPh: 'Search patient, case, facility',
+  filters: [{ key: 'win', label: 'Expires within', get: e => dayDiff(e.exp) < 0 ? 'Expired' : dayDiff(e.exp) <= 14 ? '14 days' : dayDiff(e.exp) <= 30 ? '30 days' : '90 days', opts: ['Expired', '14 days', '30 days', '90 days'] }, { key: 'sent', label: 'Renewal link', get: e => e.sent ? 'Sent' : 'Not sent', opts: ['Sent', 'Not sent'] }, { key: 'fac', label: 'Facility', get: e => e.c.facility }],
+  text: e => [fullName(e.c), e.c.id, e.c.facility].join(' '),
+  cols: [
+    ['Patient', 'auto', e => `<a href="#" data-a="case" data-id="${e.c.id}" class="strong pname">${esc(fullName(e.c))}</a><span class="sub num">${e.c.id} · ${esc(e.c.phone)}</span>`],
+    ['Facility', '220px', e => esc(e.c.facility)],
+    ['Signed via', '150px', e => e.via],
+    ['Expires', '130px', e => { const d = dayDiff(e.exp); return `<span class="num ${d <= 14 ? 'overdue' : ''}">${fmt(e.exp)}</span><span class="sub num ${d <= 14 ? 'overdue' : ''}">${d < 0 ? `${-d} days ago` : `in ${d} days`}</span>`; }],
+    ['Renewal link', '130px', e => e.renewed ? pill('Consented') : e.sent ? `<span class="num">Sent ${e.sent}</span>` : '<span class="muted">Not sent</span>'],
+    ['', '190px', e => e.renewed ? '' : `<div class="rowacts"><button class="btn sm" data-a="modal" data-v="consentrenew" data-id="${e.c.id}">${ic('send', 14)} ${e.sent ? 'Resend' : 'Send'} link</button></div>`, 'r']
+  ], opts: {}
+});
+
+/* ---------- Pharmacies ---------- */
+ROUTES_X.pharmacies = () => listPage('pharmacies', {
+  title: 'Pharmacies', sub: 'Specialty and mail-order pharmacies that fill EMX-300', noun: 'pharmacies', rows: PHARMACIES, searchPh: 'Search name, city, phone, fax',
+  head: `<button class="btn primary" data-a="orgnew" data-v="pharmacies">${ic('plus', 16)} Add pharmacy</button>`,
+  filters: [{ key: 'type', label: 'Type', get: r => r.type }, { key: 'status', label: 'Status', get: r => r.status, opts: ['Active', 'Inactive'] }],
+  text: r => [r.name, r.city, r.phone, r.fax].join(' '),
+  cols: [
+    ['Pharmacy', 'auto', r => `<a href="#" data-a="pharmacy" data-id="${r.id}" class="strong pname">${esc(r.name)}</a><span class="sub">${esc(r.type)}</span>`],
+    ['Address', '260px', r => pinAddr(r.st, r.city)], ['Phone', '160px', r => `<span class="num">${r.phone}</span>`], ['Fax', '160px', r => `<span class="num">${r.fax}</span>`],
+    ['Open cases', '110px', r => `<span class="num">${CASES.filter(c => c.pharmacy === r.name && !['Closed', 'Complete'].includes(c.caseStatus)).length}</span>`, 'r'],
+    ['Status', '110px', r => statusPill(r.status)]
+  ], opts: { rowAct: r => `data-a="pharmacy" data-id="${r.id}"` }
+});
+ROUTES_X.pharmacy = () => {
+  const o = PHARMACIES.find(x => x.id === S.detail.org) || PHARMACIES[0];
+  const cases = CASES.filter(c => c.pharmacy === o.name), users = PUSERS.filter(u => u.org === o.name);
+  const tab = S.tab2.pharmacy || 'cases';
+  const body = tab === 'cases' ? dtable([
+    ['Patient', 'auto', c => `<a href="#" data-a="case" data-id="${c.id}" class="strong pname">${esc(fullName(c))}</a><span class="sub num">${c.id}</span>`],
+    ['Shipment', '170px', c => pill(c.ship)], ['Case status', '220px', c => pill(c.caseStatus)], ['Follow-up', '130px', c => followCell(c)]
+  ], pageSlice('pharmacy', cases), { rowAct: c => `data-a="case" data-id="${c.id}"` }) + pagerX('pharmacy', cases.length, 'cases')
+    : `<div class="tp-h"><h2>Pharmacy users</h2><button class="btn primary" data-a="modal" data-v="usernew" data-id="pharm">${ic('plus', 16)} Add user</button></div>${userTable(users, false)}`;
+  return `<div class="page"><div class="crumbs"><a href="#" data-a="go" data-r="pharmacies">Pharmacies</a>${ic('chevr', 12)}<span>${esc(o.name)}</span></div>
+  <section class="card"><div class="casehead"><div class="who"><span class="ini" style="border-radius:10px">${ic('pill', 20)}</span><div><div class="nm">${esc(o.name)}</div><div class="ids"><span>${esc(o.type)}</span><span>${o.status}</span></div></div></div>
+  <div class="acts"><button class="btn" data-a="edit" data-v="org">${ic('edit', 16)} Edit</button><button class="btn ${o.status === 'Inactive' ? '' : 'danger'}" data-a="modal" data-v="deact" data-id="org:${o.id}">${o.status === 'Inactive' ? 'Reactivate' : 'Deactivate'}</button></div></div></section>
+  <div class="caselayout side-left"><div class="sidecol"><section class="card"><div class="card-h"><h3>Pharmacy details</h3></div><div class="card-b kvp"><div class="fields">${fld('Type', o.type, false)}${fld('Address', `${o.st}, ${o.city}`)}${fld('Phone', o.phone)}${fld('Fax', o.fax)}${fld('NCPDP', '44' + o.id.slice(2).padStart(5, '0'))}</div></div></section></div>
+  <div><div class="tabs" role="tablist">${[['cases', 'Cases', cases.length], ['users', 'Users', users.length]].map(([k, l, n]) => `<button role="tab" aria-selected="${tab === k}" data-a="tab2" data-k="pharmacy" data-v="${k}">${l} <span class="n num">${n}</span></button>`).join('')}</div><div class="tabpanel">${body}</div></div></div></div>`;
+};
+
+/* ---------- Users (pharmacy, facility, hub) ---------- */
+function userTable(rows, withOrg, orgLabel = 'Organization') {
+  return dtable([
+    ['Name', 'auto', u => `<span class="strong">${esc(u.name)}</span><span class="sub">${esc(u.email)}</span>`],
+    ...(withOrg ? [[orgLabel, '220px', u => u.fac ? `<a href="#" data-a="facility" data-id="${u.fac.id}">${esc(u.fac.name)}</a>` : esc(u.org || 'eMAXHealth')]] : []),
+    ['Role', '190px', u => esc(u.role)], ['Status', '150px', u => statusPill(u.status)],
+    ['Last sign-in', '120px', u => `<span class="num">${u.last || (u.status === 'Active' ? fmt(addDays(TODAY, -((u.name.length * 3) % 20))) : 'Never')}</span>`],
+    ['', '120px', u => splitAct('u' + u.ref), 'r']
+  ], rows);
+}
+function usersPage(pid, title, sub, rows, kind, orgLabel) {
+  const cfg = {
+    title, sub, noun: 'users', rows, searchPh: 'Search name, email, organization',
+    head: `<button class="btn primary" data-a="modal" data-v="usernew" data-id="${kind}">${ic('plus', 16)} Add user</button>`,
+    filters: [{ key: 'role', label: 'Role', get: u => u.role, opts: USER_ROLES[kind] }, { key: 'status', label: 'Status', get: u => u.status, opts: ['Active', 'Invite pending', 'Inactive'] }, ...(orgLabel ? [{ key: 'org', label: orgLabel, get: u => u.fac ? u.fac.name : u.org }] : [])],
+    text: u => [u.name, u.email, u.fac ? u.fac.name : u.org].join(' '), cols: [], opts: {}
+  };
+  const html = listPage(pid, cfg);
+  const shown = pageSlice(pid, applyPF(pid, cfg.filters, rows, cfg.text));
+  return html.replace(/<div class="tablewrap">[\s\S]*?<\/table><\/div>/, userTable(shown, !!orgLabel, orgLabel));
+}
+ROUTES_X.pusers = () => usersPage('pusers', 'Pharmacy Users', 'People at partner pharmacies with portal access', PUSERS, 'pharm', 'Pharmacy');
+ROUTES_X.fusers = () => { allUsers(); return usersPage('fusers', 'Facility Users', 'Prescribers and office staff with provider portal access', FACILITIES.flatMap(f => f.users), 'fac', 'Facility'); };
+ROUTES_X.hubusers = () => usersPage('hubusers', 'Hub Users', 'eMAXHealth staff accounts and roles', HUBUSERS, 'hub', null).replace('<th style="width:120px" class="">Last sign-in</th>', '<th style="width:120px" class="">Last sign-in</th>');
+
+/* ---------- Reports ---------- */
+const REPORTS = [
+  { id: 'status', icon: 'folder', t: 'Cases by status', d: 'Where every open case sits in the workflow today', rows: () => CASE_STATUS.map(s => [s, CASES.filter(c => c.caseStatus === s).length]), unit: 'cases' },
+  { id: 'payer', icon: 'card', t: 'Denials by payer', d: 'Denied coverage outcomes grouped by payer', rows: () => PAYERS.filter(p => p !== 'No insurance').map(p => [p, CASES.filter(c => c.payer === p && c.coverage === 'Denied').length]).sort((a, b) => b[1] - a[1]), unit: 'denials' },
+  { id: 'owner', icon: 'users', t: 'Workload by coordinator', d: 'Open cases assigned to each person', rows: () => [...TEAM, 'Unassigned'].map(p => [p, CASES.filter(c => c.owner === p && !['Closed', 'Complete'].includes(c.caseStatus)).length]).sort((a, b) => b[1] - a[1]), unit: 'open cases' },
+  { id: 'aging', icon: 'clock', t: 'Follow-up aging', d: 'How overdue follow-ups are, in buckets', rows: () => [['Due today', 0, 0], ['1 to 3 days late', 1, 3], ['4 to 7 days late', 4, 7], ['8 to 14 days late', 8, 14], ['More than 14 days late', 15, 999]].map(([l, a, b]) => [l, CASES.filter(c => c.follow && -dayDiff(c.follow) >= a && -dayDiff(c.follow) <= b).length]).concat([['No follow-up set', CASES.filter(c => !c.follow).length]]), unit: 'cases' },
+  { id: 'auth', icon: 'shield', t: 'Authorizations by status', d: 'Prior authorization and appeal requests in flight', rows: () => AR_STATUS.map(s => [s, CASES.filter(c => c.ar === s).length]), unit: 'requests' },
+  { id: 'fax', icon: 'fax', t: 'Fax results', d: 'Outcome of faxes sent and received', rows: () => ['Delivered', 'Received', 'Sending', 'Pending', 'Staged', 'Failed'].map(s => [s, FAXLOG.filter(f => f.status === s).length]), unit: 'faxes' }
+];
+ROUTES_X.reports = () => `<div class="page"><div class="pagehead"><div><h1>Reports</h1><div class="muted" style="font-size:13px">Operational reports built from live case data. Open one to see the chart, the numbers and export them.</div></div></div>
+  <div class="rgrid">${REPORTS.map(r => { const rows = r.rows(); const tot = rows.reduce((n, x) => n + x[1], 0); const max = Math.max(1, ...rows.map(x => x[1])); return `<button class="card rcard" data-a="report" data-v="${r.id}"><span class="rc-h"><span class="rc-ic">${ic(r.icon, 18)}</span><b>${r.t}</b></span><span class="muted">${r.d}</span><span class="spark" aria-hidden="true">${rows.slice(0, 8).map(x => `<i style="height:${Math.max(4, x[1] / max * 100)}%"></i>`).join('')}</span><span class="rc-f"><span class="num"><b>${tot}</b> ${r.unit}</span>${ic('arrowr', 16)}</span></button>`; }).join('')}</div></div>`;
+ROUTES_X.report = () => {
+  const r = REPORTS.find(x => x.id === S.detail.report) || REPORTS[0]; const rows = r.rows(); const tot = rows.reduce((n, x) => n + x[1], 0); const max = Math.max(1, ...rows.map(x => x[1]));
+  const view = S.detail.rview || 'chart';
+  return `<div class="page"><div class="crumbs"><a href="#" data-a="go" data-r="reports">Reports</a>${ic('chevr', 12)}<span>${r.t}</span></div>
+  <div class="pagehead"><div><h1>${r.t}</h1><div class="muted" style="font-size:13px">${r.d} · as of ${fmt(TODAY)}</div></div><div class="seg lite">${[['chart', 'Chart'], ['table', 'Table']].map(([k, l]) => `<button data-a="rview" data-v="${k}" aria-pressed="${view === k}">${l}</button>`).join('')}</div><button class="btn" data-a="reportcsv" data-v="${r.id}">${ic('download', 16)} Export CSV</button></div>
+  <section class="card"><div class="card-h"><h2 class="num">${tot} ${r.unit}</h2></div>
+  ${view === 'chart' ? `<div class="hbars" role="img" aria-label="${esc(r.t)} bar chart">${rows.map(([l, n]) => `<div class="hb" title="${esc(l)}: ${n} ${r.unit}"><span class="hb-l">${esc(l)}</span><span class="hb-t"><i style="width:${n / max * 100}%"></i></span><span class="hb-v num">${n}<span class="muted"> · ${tot ? Math.round(n / tot * 100) : 0}%</span></span></div>`).join('')}</div>`
+    : dtable([[r.t.split(' by ')[1] ? r.t.split(' by ')[1].replace(/^./, x => x.toUpperCase()) : 'Group', 'auto', x => esc(x[0])], ['Count', '120px', x => `<span class="num">${x[1]}</span>`, 'r'], ['Share', '120px', x => `<span class="num">${tot ? Math.round(x[1] / tot * 100) : 0}%</span>`, 'r']], rows)}</section></div>`;
+};
+
+/* ---------- Settings ---------- */
+ROUTES_X.settings = () => {
+  const sec = S.detail.set || 'profile'; const V = SETTINGS;
+  const secs = [['profile', 'Profile', 'users'], ['notif', 'Notifications', 'bell'], ['work', 'Work preferences', 'folder'], ['look', 'Appearance', 'grid'], ['ooo', 'Out of office', 'cal']];
+  const tog = (k, l, s) => `<label class="setrow"><span><b>${l}</b><span class="muted">${s}</span></span><input type="checkbox" class="switch" data-set="${k}" ${V[k] ? 'checked' : ''}></label>`;
+  const sel = (k, l, opts) => `<div class="input"><label class="lbl" for="set-${k}">${l}</label><select id="set-${k}" data-set="${k}">${opts.map(o => `<option ${V[k] === o ? 'selected' : ''}>${o}</option>`).join('')}</select></div>`;
+  let body = '';
+  if (sec === 'profile') body = `<div class="card-h"><h2>Profile</h2></div><div class="card-b setform"><div class="setid"><span class="avatar" style="width:56px;height:56px;font-size:18px">JM</span><div><b>${esc(V.name)}</b><div class="muted">Patient access coordinator · Hub user since 2024</div></div></div>
+    <div class="polgrid">${inp('set-name', 'Full name', { v: V.name })}${inp('set-phone', 'Direct phone', { v: V.phone })}${inp('set-email', 'Email', { v: V.email, span: 1, help: 'Used for sign-in and notification emails' })}</div>${inp('set-sig', 'Message signature', { area: 1, h: 80, v: V.sig })}
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" data-a="modal" data-v="pwchange">${ic('key', 16)} Change password</button><button class="btn primary" data-a="setprofile">Save profile</button></div></div>`;
+  if (sec === 'notif') body = `<div class="card-h"><h2>Notifications</h2></div><div class="card-b">${tog('n_assign', 'A case is assigned to me', 'Email and in-app')}${tog('n_msg', 'A provider or pharmacy replies', 'In-app, plus email if not read in 1 hour')}${tog('n_fax', 'A fax fails to send', 'In-app')}${tog('n_expire', 'An authorization on my cases is about to expire', 'Email, 14 days ahead')}${tog('n_digest', 'Daily summary', 'Email at 7:30 AM with follow-ups due today')}</div>`;
+  if (sec === 'work') body = `<div class="card-h"><h2>Work preferences</h2></div><div class="card-b setform"><div class="polgrid">${sel('landing', 'Start page after sign-in', ['Dashboard', 'Cases', 'Communications', 'Unattached Uploads'])}${sel('rows', 'Rows per page', ['25', '50', '100'])}</div></div>`;
+  if (sec === 'look') body = `<div class="card-h"><h2>Appearance</h2></div><div class="card-b setform"><div class="lbl">Color theme</div><div class="swrow">${HUES.map(([k, l, hex]) => `<button class="swbig ${S.hue === k ? 'on' : ''}" data-a="hue" data-v="${k}"><span style="background:${hex}"></span>${l}</button>`).join('')}</div><div class="lbl" style="margin-top:6px">Layout</div><div class="radio-cards">${[['H', 'A'], ['D', 'B'], ['A', 'C']].map(([k, sh]) => `<label data-a="dir" data-v="${k}"><input type="radio" name="dirset" ${S.dir === k ? 'checked' : ''}><span><b>${sh} · ${DIRS[k][0]}</b><br><span class="muted">${DIRS[k][1]}</span></span></label>`).join('')}</div><p class="muted" style="margin:0;font-size:13px">Both are also in the avatar menu at the top right. Saved on this computer.</p></div>`;
+  if (sec === 'ooo') body = `<div class="card-h"><h2>Out of office</h2></div><div class="card-b setform">${tog('ooo', 'I am out of office', 'New assignments go to your delegate and senders see an auto reply')}${V.ooo ? `<div class="polgrid">${sel('delegate', 'Delegate', TEAM.filter(t => t !== ME))}${inp('set-back', 'Back on', { type: 'date', v: '2026-10-05' })}</div>` : ''}</div>`;
+  return `<div class="page"><div class="pagehead"><div><h1>Settings</h1><div class="muted" style="font-size:13px">Your account and how HealthPacer works for you</div></div></div>
+  <div class="caselayout side-left setlayout"><nav class="card setnav" aria-label="Settings sections">${secs.map(([k, l, i]) => `<button data-a="setsec" data-v="${k}" aria-current="${sec === k}">${ic(i, 16)} ${l}</button>`).join('')}</nav><section class="card">${body}</section></div></div>`;
+};
+
+/* ---------- Drawer: adverse event ---------- */
+const _drawer1 = drawer;
+drawer = function () {
+  const d = S.drawer; if (!d || d.type !== 'ae') return _drawer1();
+  const a = AES.find(x => x.id === d.id);
+  const body = `<div style="display:flex;gap:8px;align-items:center"><span class="pill ${aeTone[a.status]}">${a.status}</span><span class="pill ${a.sev === 'Non-serious' ? 't-neutral' : 't-danger'}">${a.sev}</span></div>
+    <div class="fields">${fld('Patient', `${fullName(a.c)} · ${a.c.id}`, false)}${fld('Aware on', a.date, false)}${fld('Reported by', a.src, false)}${fld('Recorded by', a.by, false)}${fld('Safety report due', a.status === 'Closed' ? 'Done' : a.due, false)}</div>
+    <div class="kv-sub">What happened</div><p style="margin:0;font-size:14px">${esc(a.desc)}</p>
+    ${a.status === 'Follow-up requested' ? `<div class="note-banner" style="background:var(--warn-50);color:var(--warn)">${ic('alert', 16)}<span>The safety team asked for the prescriber's assessment and lab values.</span></div>` : ''}`;
+  const foot = `<button class="btn" data-a="case" data-id="${a.c.id}">Open case</button><span style="flex:1"></span>${a.status === 'Draft' ? `<button class="btn primary" data-a="aestat" data-id="${a.id}" data-v="Submitted">Submit to safety</button>` : a.status === 'Closed' ? `<button class="btn" data-a="drawerclose">Close</button>` : `<button class="btn" data-a="aestat" data-id="${a.id}" data-v="Follow-up requested">Log follow-up</button><button class="btn primary" data-a="aestat" data-id="${a.id}" data-v="Closed">${ic('check', 16)} Close AE</button>`}`;
+  const enter = LAST_DRAWER !== d.type + d.id && !LAST_DRAWER;
+  return `<div class="drawer-scrim ${enter ? 'enter' : ''}" data-a="drawerclose"></div><aside class="drawer ${enter ? 'enter' : ''}" role="dialog" aria-label="${a.id}"><div class="drawer-h"><h2>${a.id}</h2><button class="iconbtn" data-a="drawerclose" aria-label="Close">${ic('x', 18)}</button></div><div class="drawer-b">${body}</div><div class="drawer-f">${foot}</div></aside>`;
+};
+
+/* ---------- Modals for these pages ---------- */
+const _xm3 = extraModal;
+extraModal = function (m, wrap) {
+  const cancel = `<button class="btn" data-a="mclose">Cancel</button>`, e = m.err || {};
+  if (m.type === 'consentrenew') { const c = byId(m.id); return wrap(`Send consent renewal to ${esc(c.first)} ${esc(c.last)}`, `<div class="seg lite">${['Text message', 'Email'].map(x => `<button data-a="cnvia" data-v="${x}" aria-pressed="${(S.cnVia || 'Text message') === x}">${x}</button>`).join('')}</div>${(S.cnVia || 'Text message') === 'Text message' ? inp('cnto', 'Mobile number', { v: c.phone, req: 1 }) : inp('cnto', 'Email', { v: email(c), req: 1 })}<div class="note-banner">${ic('info', 16)}<span>The link opens the e-signature form and expires in 7 days.</span></div>`, `${cancel}<button class="btn primary" data-a="consentsend2" data-id="${c.id}">${ic('send', 16)} Send link</button>`); }
+  if (m.type === 'pwchange') return wrap('Change password', `${inp('pw0', 'Current password', { type: 'password', req: 1, err: e.p0 })}${inp('pw1', 'New password', { type: 'password', req: 1, err: e.p1, help: 'At least 12 characters' })}${inp('pw2', 'Confirm new password', { type: 'password', req: 1, err: e.p2 })}`, `${cancel}<button class="btn primary" data-a="pwsave">Change password</button>`);
+  return _xm3(m, wrap);
+};
+
+Object.assign(EXTRA, {
+  pharmacy(t) { S.detail.org = t.dataset.id; S.route = 'pharmacy'; scrollTo(0, 0); },
+  report(t) { S.detail.report = t.dataset.v; S.detail.rview = 'chart'; S.route = 'report'; scrollTo(0, 0); },
+  rview(t) { S.detail.rview = t.dataset.v; },
+  reportcsv(t) { const r = REPORTS.find(x => x.id === t.dataset.v); downloadCsv(`${r.id}_report.csv`, ['Group', 'Count'], r.rows()); toast(`${r.t} exported`); },
+  setsec(t) { S.detail.set = t.dataset.v; },
+  setprofile() { SETTINGS.name = val('set-name') || SETTINGS.name; SETTINGS.phone = val('set-phone'); SETTINGS.email = val('set-email'); SETTINGS.sig = val('set-sig'); toast('Profile saved'); },
+  pwsave() { const a = val('pw0'), b = val('pw1'), c = val('pw2'), err = {}; if (!a) err.p0 = 'Enter your current password'; if (b.length < 12) err.p1 = 'Use at least 12 characters'; if (b !== c) err.p2 = 'Passwords do not match'; if (Object.keys(err).length) { S.modal.err = err; return; } S.modal = null; toast('Password changed'); },
+  cnvia(t) { S.cnVia = t.dataset.v; },
+  consentsend2(t) { const x = CONSENTS.find(e => e.c.id === t.dataset.id); if (x) x.sent = fmt(TODAY); S.modal = null; toast(`Renewal link sent by ${(S.cnVia || 'Text message').toLowerCase()}`); },
+  aestat(t) { const a = AES.find(x => x.id === t.dataset.id); a.status = t.dataset.v; if (a.status === 'Follow-up requested') a.due = fmt(addDays(TODAY, 3)); toast(a.status === 'Closed' ? `${a.id} closed` : a.status === 'Submitted' ? `${a.id} submitted to the safety team` : 'Follow-up logged'); }
+});
+/* ================= Dashboard layout concepts ================= */
+const DASHES = [['deck', 'Command deck', 'Work list in the center, queues and today’s activity on side panels, same as every other page'], ['focus', 'Focus stack', 'One case at a time, dealt like cards, most urgent first'], ['bento', 'Bento board', 'Floating tiles of different sizes, each one a shortcut'], ['flow', 'Pipeline', 'Every case placed along the workflow so bottlenecks stand out'], ['classic', 'Current', 'The dashboard as it is today, for comparison']];
+S.dash = 'deck'; try { const d = localStorage.getItem('hp-dash'); if (d && DASHES.some(x => x[0] === d)) S.dash = d; } catch (e) { }
+S.fq = 'overdue'; S.fi = 0; S.flowMine = false;
+const dashDocks = () => { if (S.dash === 'deck') { S.dockL = true; S.dockR = false; } };
+if (S.route === 'dashboard') dashDocks();
+const _go0 = go; go = function (r) { if (r === 'dashboard' && S.route !== 'dashboard') dashDocks(); return _go0(r); };
+const _viewDashboard0 = viewDashboard;
+const greet = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
+const dueLabel = (c) => !c.follow ? 'No follow-up date' : dayDiff(c.follow) < 0 ? `${-dayDiff(c.follow)} ${dayDiff(c.follow) === -1 ? 'day' : 'days'} overdue` : dayDiff(c.follow) === 0 ? 'Due today' : `Due ${fmt(c.follow)}`;
+const openCases = () => CASES.filter(c => !['Closed', 'Complete'].includes(c.caseStatus));
+const byUrgency = (L) => L.slice().sort((a, b) => (a.follow ? dayDiff(a.follow) : 999) - (b.follow ? dayDiff(b.follow) : 999));
+viewDashboard = function () {
+  const v = { deck: dashDeck, focus: dashFocus, bento: dashBento, flow: dashFlow }[S.dash];
+  return v ? v() : _viewDashboard0().replace('<div class="card-f muted">Expiring consents board is coming in a later phase.</div>', '<div class="card-f"><a href="#" data-a="go" data-r="expcon">Open Expiring Consents</a></div>');
+};
+const dashHead = (extra = '') => `<div class="pagehead"><div><h1>${greet()}, Janet</h1><div class="muted" style="font-size:13px">Thursday, September 24, 2026 · ${CASES.filter(c => c.owner === ME).length} cases assigned to you</div></div>${extra}<button class="btn" data-a="go" data-r="cases">${ic('folder', 16)} All cases</button><button class="btn primary" data-a="newcase">${ic('plus', 16)} New case</button></div>`;
+
+/* ---------- 1. Command deck: same layered panels as every other page ---------- */
+function dashDeck() {
+  const t = due.today(), o = due.overdue(), m = due.missing();
+  const wl = { today: ['Due today', t], overdue: ['Overdue', o], missing: ['Missing follow-up date', m] };
+  const [wlLabel, wlList] = wl[S.wl];
+  const q = (k, icon, label, n, sub, tone) => `<button class="qrow ${S.wl === k ? 'on' : ''} q-${tone}" data-a="wl" data-v="${k}"><span class="qi">${ic(icon, 16)}</span><span class="qt"><b>${label}</b><span>${sub}</span></span><span class="qn num">${n}</span></button>`;
+  const link = (r, icon, label, n) => `<button class="qrow sm" data-a="go" data-r="${r}"><span class="qi">${ic(icon, 16)}</span><span class="qt"><b>${label}</b></span>${n ? `<span class="qn num">${n}</span>` : ''}</button>`;
+  const left = `<aside class="dock ${S.dockL ? '' : 'closed'}" aria-label="Queues"><div class="dock-head">${ic('list', 16)}<h3>My queues</h3><button class="iconbtn" data-a="dockL" aria-label="Toggle queues">${ic(S.dockL ? 'chevl' : 'chevr', 16)}</button><span class="vlabel">Queues</span></div>
+    <div class="dock-body qdock"><div class="qsec">Follow-ups</div>${q('overdue', 'alert', 'Overdue', o.length, `Oldest ${Math.max(...o.map(c => -dayDiff(c.follow)))} days`, 'red')}${q('today', 'clock', 'Due today', t.length, `${t.filter(c => c.owner === ME).length} are yours`, 'yellow')}${q('missing', 'cal', 'Missing a date', m.length, 'Open cases with no date', 'yellow')}
+    <div class="qsec">Inbox</div>${link('comms', 'chat', 'Communications', 3)}${link('uploads', 'upload', 'Unattached uploads', 2)}${link('fax', 'fax', 'Failed faxes', FAXLOG.filter(f => f.status === 'Failed').length)}${link('acct', 'userplus', 'Account requests', ACCT.filter(a => a.status === 'Requested').length)}
+    <div class="qsec">Boards</div>${link('expauth', 'shield', 'Expiring authorizations', EXPIRING.filter(e => e.kind === 'Authorization').length)}${link('expcon', 'heart', 'Expiring consents', CONSENTS.length)}</div></aside>`;
+  const week = Array.from({ length: 7 }, (_, i) => { const d = addDays(TODAY, i); return [d, CASES.filter(c => c.follow && dayDiff(c.follow) === i).length]; }); const wmax = Math.max(1, ...week.map(w => w[1]));
+  const right = `<aside class="dock right ${S.dockR ? '' : 'closed'}" aria-label="Today"><div class="dock-head">${ic('bell', 16)}<h3>Today</h3><button class="iconbtn" data-a="dockR" aria-label="Toggle today">${ic(S.dockR ? 'chevr' : 'chevl', 16)}</button><span class="vlabel">Today</span></div>
+    <div class="dock-body"><div class="section-t">This week</div><div class="weekbars">${week.map(([d, n], i) => `<button class="wb ${i === 0 ? 'today' : ''}" data-a="drillwl" data-v="today" title="${n} follow-ups on ${fmt(d)}"><span class="wbn num">${n}</span><span class="wbt"><i style="height:${n / wmax * 100}%"></i></span><span class="wbd">${'SMTWTFS'[d.getDay()]}</span></button>`).join('')}</div>
+    <div class="section-t">Latest</div><div class="tl">${NOTIFS.map(x => `<button class="tli ${x.unread ? 'unread' : ''}" data-a="notifopen" data-v="${x.id}"><span class="tld">${ic(x.icon, 13)}</span><span><b>${esc(x.t)}</b><span>${esc(x.s)} · ${x.when}</span></span></button>`).join('')}</div></div></aside>`;
+  const pipe = [['Requested', 'Intake', 'Requested'], ['Benefits', 'BI'], ['Prior auth', 'Pending PA Submission', 'Pending PA Outcome'], ['Appeals', 'Pending Appeal Submission', 'Pending Appeal Outcome'], ['PAP', 'Pending PAP'], ['On therapy', 'Active']].map(([l, ...st]) => [l, CASES.filter(c => st.includes(c.caseStatus)).length, st[0]]);
+  const center = `<div class="center"><div class="page">${dashHead()}
+    <div class="pipechips">${pipe.map(([l, n, st], i) => `<button class="pchip" data-a="drill" data-k="caseStatus" data-v="${esc(st)}"><span class="num">${n}</span>${l}</button>${i < pipe.length - 1 ? `<span class="parr">${ic('chevr', 14)}</span>` : ''}`).join('')}</div>
+    <div class="grid g-main"><section class="card worklist"><div class="card-h"><h2>${wlLabel}</h2><span class="muted num" style="font-size:12.5px">${wlList.length} cases</span></div>${worklistItems(byUrgency(wlList), 8)}<div class="card-f"><a href="#" data-a="drillwl" data-v="${S.wl}">View all ${wlList.length} ${wlLabel.toLowerCase()} cases</a></div></section>
+    ${statCard('Authorization requests', 'ar', AR_STATUS, CASES.filter(c => c.ar !== 'None').length, true)}</div></div></div>`;
+  return `<div class="workspace dashws">${left}${center}${right}</div>`;
+}
+
+/* ---------- 2. Focus stack: one case at a time ---------- */
+function focusList() { return byUrgency({ overdue: due.overdue(), today: due.today(), missing: due.missing() }[S.fq]); }
+function dashFocus() {
+  const L = focusList(); const i = Math.min(S.fi, Math.max(0, L.length - 1)); S.fi = i;
+  const cards = L.slice(i, i + 4);
+  const qb = (k, label, n, hot) => `<button class="fqb ${S.fq === k ? 'on' : ''} ${hot ? 'hot' : ''}" data-a="fq" data-v="${k}"><span class="num">${n}</span>${label}</button>`;
+  const card = (c, depth) => { const I = info(c); return `<article class="fcard" style="--d:${depth}" ${depth ? 'aria-hidden="true"' : ''}>
+    <div class="fc-top"><span class="fc-av">${c.first[0]}${c.last[0]}</span><div><div class="fc-nm">${esc(c.first)} ${esc(c.last)}</div><div class="muted num">${c.id} · DOB ${fmt(c.dob)} · ${esc(c.phone)}</div></div><span class="fc-due ${c.follow && dayDiff(c.follow) < 0 ? 'late' : ''}">${ic('clock', 14)} ${dueLabel(c)}</span></div>
+    <div class="fc-next"><span class="lbl">Next step</span><b>${esc(nextStep(c))}</b></div>
+    <div class="fc-grid"><div><span class="lbl">Case status</span>${pill(c.caseStatus)}</div><div><span class="lbl">Coverage</span>${pill(c.coverage)}</div><div><span class="lbl">Authorization</span>${c.ar === 'None' ? '<span class="muted">None</span>' : pill(c.ar)}</div><div><span class="lbl">Payer</span>${esc(c.payer)}</div><div><span class="lbl">Prescriber</span>${esc(c.prescriber)}</div><div><span class="lbl">Assigned to</span>${c.owner === 'Unassigned' ? '<span class="overdue">Unassigned</span>' : esc(c.owner)}</div></div>
+    ${NOTES[0] && c.id === CASES[0].id ? `<div class="fc-note"><span class="hltext">${esc(NOTES.find(n => n[4]) ? NOTES.find(n => n[4])[3] : '')}</span></div>` : `<div class="fc-note muted">${esc(I.medical.dx)} · ${esc(c.pharmacy)} · ${esc(c.lang)} speaker, best reached ${esc(c.best.toLowerCase())}</div>`}
+    <div class="fc-acts"><button class="btn" data-a="fsnooze" data-id="${c.id}">${ic('cal', 16)} Snooze a day</button><button class="btn" data-a="fcall" data-id="${c.id}">${ic('phone', 16)} Log call</button><span class="sp"></span><button class="btn primary" data-a="case" data-id="${c.id}">Open case ${ic('arrowr', 16)}</button></div></article>`; };
+  const up = L.slice(i + 1, i + 7);
+  return `<div class="page focuspage">${dashHead()}
+  <div class="focuswrap"><div class="fq">${qb('overdue', 'Overdue', due.overdue().length, true)}${qb('today', 'Due today', due.today().length)}${qb('missing', 'Missing a date', due.missing().length)}<div class="fq-note muted">Most urgent first. Snooze moves the follow-up to tomorrow and deals the next card.</div></div>
+  <div class="fstage">${L.length ? `<div class="fdeck">${cards.map((c, d) => card(c, d)).reverse().join('')}</div><div class="fnav"><button class="iconbtn" data-a="fnav" data-v="-1" ${i ? '' : 'disabled'} aria-label="Previous case">${ic('chevl', 18)}</button><span class="num">${i + 1} of ${L.length}</span><button class="iconbtn" data-a="fnav" data-v="1" ${i < L.length - 1 ? '' : 'disabled'} aria-label="Next case">${ic('chevr', 18)}</button></div>` : `<div class="fempty">${ic('check', 28)}<b>All caught up</b><span class="muted">Nothing left in this queue.</span></div>`}</div>
+  <aside class="fup"><div class="section-t">Up next</div>${up.map((c, k) => `<button class="fupi" data-a="fjump" data-v="${i + 1 + k}"><span><b>${esc(fullName(c))}</b><span class="muted">${esc(nextStep(c))}</span></span><span class="num ${c.follow && dayDiff(c.follow) < 0 ? 'overdue' : 'muted'}">${c.follow ? (dayDiff(c.follow) < 0 ? `${-dayDiff(c.follow)}d` : dayDiff(c.follow) === 0 ? 'Today' : fmt(c.follow)) : 'No date'}</span></button>`).join('') || '<div class="muted" style="font-size:13px">Nothing after this one.</div>'}
+  <div class="fstats"><button data-a="go" data-r="comms"><span class="num">3</span>messages to answer</button><button data-a="go" data-r="uploads"><span class="num">2</span>uploads to file</button><button data-a="drill" data-k="ar" data-v="Appeal in Progress"><span class="num">${CASES.filter(c => c.ar === 'Appeal in Progress').length}</span>appeals in progress</button></div></aside></div></div>`;
+}
+let FOCUS_MOVE = null;
+function focusCapture(dir) { const top = document.querySelector('.fcard[style*="--d:0"]'); if (!top) return; const r = top.getBoundingClientRect(); const g = top.cloneNode(true); g.classList.add('fghost'); Object.assign(g.style, { position: 'fixed', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px', margin: 0, zIndex: 60 }); FOCUS_MOVE = { g, dir }; }
+function focusPlay() {
+  const m = FOCUS_MOVE; FOCUS_MOVE = null; if (!m || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  document.body.appendChild(m.g);
+  const out = m.dir > 0 ? [{ transform: 'none', opacity: 1 }, { transform: 'translate(-70%, -30px) rotate(-14deg)', opacity: 0 }] : [{ transform: 'none', opacity: 1 }, { transform: 'translateY(24px) scale(.95)', opacity: 0 }];
+  m.g.animate(out, { duration: 420, easing: 'cubic-bezier(.4,0,.6,.4)', fill: 'forwards' }).onfinish = () => m.g.remove();
+  document.querySelectorAll('.fcard').forEach(el => { const d = +getComputedStyle(el).getPropertyValue('--d'); el.animate(m.dir > 0 ? [{ transform: `translateY(${(d + 1) * 14}px) scale(${1 - (d + 1) * .045})`, opacity: d >= 2 ? 0 : 1 }, { transform: `translateY(${d * 14}px) scale(${1 - d * .045})`, opacity: 1 }] : [{ transform: 'translateX(-60%) rotate(-10deg)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 520, delay: m.dir > 0 ? 120 : 0, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }); if (m.dir < 0) return; });
+}
+
+/* ---------- 3. Bento board ---------- */
+function dashBento() {
+  const t = due.today(), o = due.overdue(), m = due.missing(); const mine = CASES.filter(c => c.owner === ME);
+  const ages = [['1 to 3', 1, 3], ['4 to 7', 4, 7], ['8 to 14', 8, 14], ['15+', 15, 999]].map(([l, a, b]) => [l, o.filter(c => -dayDiff(c.follow) >= a && -dayDiff(c.follow) <= b).length]); const amax = Math.max(1, ...ages.map(x => x[1]));
+  const stages = [['Requested', ['Intake', 'Requested']], ['BI', ['BI']], ['PA', ['Pending PA Submission', 'Pending PA Outcome']], ['Appeal', ['Pending Appeal Submission', 'Pending Appeal Outcome']], ['PAP', ['Pending PAP']], ['Active', ['Active']]].map(([l, st]) => [l, CASES.filter(c => st.includes(c.caseStatus)).length, st[0]]);
+  const load = [...TEAM, 'Unassigned'].map(p => [p, openCases().filter(c => c.owner === p).length]); const lmax = Math.max(1, ...load.map(x => x[1]));
+  const exp = EXPIRING.slice().sort((a, b) => a.exp - b.exp).slice(0, 4);
+  const tile = (cls, body, act = '') => `<section class="btile ${cls}" ${act}>${body}</section>`;
+  return `<div class="page bentopage"><div class="bento">
+  ${tile('b-hero', `<div class="bh-date">Thursday, September 24</div><h1>${greet()}, Janet</h1><p>You have <b>${t.length} follow-ups due today</b> and <b>${o.length} overdue</b>. ${mine.filter(c => c.ar === 'Appeal in Progress').length} of your cases are in appeal.</p><div class="bh-acts"><button class="btn" data-a="dashset" data-v="focus">${ic('arrowr', 16)} Work them one by one</button><button class="btn light" data-a="newcase">${ic('plus', 16)} New case</button></div>`)}
+  ${tile('b-over click', `<div class="bt-h"><span>Overdue follow-ups</span>${ic('alert', 16)}</div><div class="bt-big hot num">${o.length}</div><div class="agebars">${ages.map(([l, n]) => `<div title="${n} cases ${l} days late"><span class="num">${n}</span><i style="height:${n / amax * 100}%"></i><em>${l}d</em></div>`).join('')}</div>`, 'data-a="drillwl" data-v="overdue"')}
+  ${tile('b-today click', `<div class="bt-h"><span>Due today</span>${ic('clock', 16)}</div><div class="bt-big num">${t.length}</div><div class="muted">${t.filter(c => c.owner === ME).length} are yours · ${m.length} ${m.length === 1 ? 'case has' : 'cases have'} no date</div>`, 'data-a="drillwl" data-v="today"')}
+  ${tile('b-work worklist', `<div class="bt-h"><span>My work</span><div class="seg lite">${[['today', 'Today', t], ['overdue', 'Overdue', o], ['missing', 'No date', m]].map(([k, l, L]) => `<button data-a="wl" data-v="${k}" aria-pressed="${S.wl === k}">${l} <span class="num">${L.length}</span></button>`).join('')}</div></div>${worklistItems(byUrgency({ today: t, overdue: o, missing: m }[S.wl]), 6)}`)}
+  ${tile('b-pipe', `<div class="bt-h"><span>Where cases are</span><a href="#" data-a="go" data-r="cases">All cases</a></div><div class="bpipe">${stages.map(([l, n, st]) => `<button data-a="drill" data-k="caseStatus" data-v="${esc(st)}"><span class="num">${n}</span><em>${l}</em></button>`).join(`<span class="bparr">${ic('chevr', 12)}</span>`)}</div>`)}
+  ${tile('b-inbox', `<div class="bt-h"><span>Inbox</span>${ic('chat', 16)}</div>${COMMS.filter(x => x.tag === 'Action needed').slice(0, 3).map(x => `<button class="bin" data-a="go" data-r="comms"><b>${esc(x.sender)}</b><span>${esc(x.subj)}</span></button>`).join('')}<div class="bin-f"><button data-a="go" data-r="uploads">${ic('upload', 14)} 2 uploads</button><button data-a="go" data-r="fax">${ic('fax', 14)} ${FAXLOG.filter(f => f.status === 'Failed').length} failed faxes</button></div>`)}
+  ${tile('b-exp', `<div class="bt-h"><span>Expiring soon</span><a href="#" data-a="go" data-r="expauth">Board</a></div>${exp.map(e => `<button class="bexp" data-a="case" data-id="${e.c.id}"><span><b>${esc(fullName(e.c))}</b><span class="muted">${e.kind === 'Authorization' ? 'Prior authorization' : 'Benefits'} · ${esc(e.c.payer)}</span></span><span class="num ${dayDiff(e.exp) <= 7 ? 'overdue' : ''}">${dayDiff(e.exp)}d</span></button>`).join('')}`)}
+  ${tile('b-team', `<div class="bt-h"><span>Team workload</span><a href="#" data-a="report" data-v="owner">Report</a></div>${load.map(([p, n]) => `<div class="tload" title="${n} open cases"><span>${p === ME ? 'You' : esc(p.split(' ')[0])}</span><span class="tbar"><i style="width:${n / lmax * 100}%" class="${p === ME ? 'me' : ''}"></i></span><span class="num">${n}</span></div>`).join('')}`)}
+  ${tile('b-auth', `<div class="bt-h"><span>Authorizations</span>${ic('shield', 16)}</div><div class="bauth">${[['Sent to payer', 'Sent to Payer'], ['Appeals', 'Appeal in Progress'], ['Waiting on HCP', 'Sent to HCP'], ['Approved', 'Complete']].map(([l, s]) => `<button data-a="drill" data-k="ar" data-v="${s}"><span class="num">${CASES.filter(c => c.ar === s).length}</span>${l}</button>`).join('')}</div>`)}
+  </div></div>`;
+}
+
+/* ---------- 4. Pipeline ---------- */
+const FLOW = [['Intake', 'Intake', 'Requested'], ['Benefits', 'BI'], ['PA submission', 'Pending PA Submission'], ['PA outcome', 'Pending PA Outcome'], ['Appeal submission', 'Pending Appeal Submission'], ['Appeal outcome', 'Pending Appeal Outcome'], ['PAP', 'Pending PAP'], ['On therapy', 'Active']];
+function dashFlow() {
+  const pool = S.flowMine ? CASES.filter(c => c.owner === ME) : CASES;
+  const cols = FLOW.map(([l, st, st2]) => { const L = byUrgency(pool.filter(c => c.caseStatus === st || c.caseStatus === st2)); return { l, st, L, late: L.filter(c => c.follow && dayDiff(c.follow) < 0).length }; });
+  const worst = cols.reduce((a, b) => (b.late > a.late ? b : a), cols[0]);
+  const done = pool.filter(c => ['Complete', 'Closed'].includes(c.caseStatus)).length;
+  return `<div class="page flowpage">${dashHead(`<div class="seg lite">${[[false, 'Everyone'], [true, 'Mine']].map(([k, l]) => `<button data-a="flowmine" data-v="${k ? 1 : 0}" aria-pressed="${S.flowMine === k}">${l}</button>`).join('')}</div>`)}
+  <div class="flowsum"><div><span class="num">${pool.length - done}</span>open cases</div><div class="hot"><span class="num">${cols.reduce((n, c) => n + c.late, 0)}</span>overdue follow-ups</div><div><span class="num">${worst.l}</span>busiest stage for overdue work</div><div><span class="num">${done}</span>complete or closed</div></div>
+  <div class="flow" role="list">${cols.map((c, i) => `<section class="fcol ${c === worst && c.late ? 'jam' : ''}" role="listitem" style="--i:${i}"><header><span class="fstep num">${i + 1}</span><b>${c.l}</b><span class="flcount num">${c.L.length}</span></header>${c === worst && c.late ? `<div class="jamtag">${ic('alert', 12)} Bottleneck · ${c.late} overdue</div>` : c.late ? `<div class="latetag num">${c.late} overdue</div>` : '<div class="oktag">On track</div>'}
+    <div class="fchips">${c.L.slice(0, 5).map(x => `<button class="fchip ${x.owner === ME ? 'mine' : ''}" data-a="case" data-id="${x.id}"><b>${esc(x.last)}, ${esc(x.first[0])}.</b><span class="num ${x.follow && dayDiff(x.follow) < 0 ? 'overdue' : ''}">${x.follow ? (dayDiff(x.follow) < 0 ? `${-dayDiff(x.follow)}d late` : dayDiff(x.follow) === 0 ? 'Today' : fmt(x.follow)) : 'No date'}</span></button>`).join('') || '<div class="muted fnone">Empty</div>'}</div>
+    ${c.L.length > 5 ? `<button class="fmore" data-a="drill" data-k="caseStatus" data-v="${esc(c.st)}">+${c.L.length - 5} more</button>` : ''}</section>`).join('')}</div>
+  <div class="grid g-main" style="margin-top:4px"><section class="card worklist"><div class="card-h"><h2>My overdue work</h2><span class="muted num" style="font-size:12.5px">${due.overdue().filter(c => c.owner === ME).length} cases</span></div>${worklistItems(byUrgency(due.overdue().filter(c => c.owner === ME)), 5)}</section>
+  ${statCard('Authorization requests', 'ar', AR_STATUS, CASES.filter(c => c.ar !== 'None').length, true)}</div></div>`;
+}
+
+/* ---------- Actions ---------- */
+Object.assign(EXTRA, {
+  dashset(t) { S.dash = t.dataset.v; dashDocks(); try { localStorage.setItem('hp-dash', S.dash); } catch (e) { } if (S.route !== 'dashboard') go('dashboard'); if (t.closest('.acctmenu')) S.menu = 'acct'; },
+  fq(t) { S.fq = t.dataset.v; S.fi = 0; },
+  fnav(t) { const d = +t.dataset.v; if (d > 0) focusCapture(1); S.fi = Math.max(0, S.fi + d); if (d < 0) FOCUS_MOVE = { g: document.createElement('div'), dir: -1 }; },
+  fjump(t) { focusCapture(1); S.fi = +t.dataset.v; },
+  fsnooze(t) { const c = byId(t.dataset.id); focusCapture(1); c.follow = addDays(TODAY, 1); auditLog('Case', 'Follow-up snoozed', 'Moved to ' + fmt(c.follow)); toast(`${c.first} ${c.last} snoozed to tomorrow`); },
+  fcall(t) { S.caseId = t.dataset.id; S.modal = { type: 'logcall' }; },
+  flowmine(t) { S.flowMine = t.dataset.v === '1'; }
+});
+const _afterRender2 = afterRender;
+afterRender = function () { _afterRender2(); if (FOCUS_MOVE) focusPlay(); };
 /* ================= Navigation model ================= */
 const NAV = [
   { g: 'Tools', d: 'Inbound work waiting to be filed or answered', items: [['uploads', 'Unattached Uploads', 'upload', 2, 'Files from providers not yet on a case'], ['comms', 'Communications', 'chat', 3, 'Provider and pharmacy messages'], ['acct', 'Account Requests', 'userplus', 0, 'New portal account approvals'], ['fax', 'Fax Transmissions', 'fax', 259, 'Inbound and outbound fax log', 'hot']] },
@@ -1679,8 +2463,8 @@ const NAV = [
   { g: 'Organizations', d: 'Payers, providers and pharmacies', items: [['carriers', 'Carriers', 'card', null, 'Medical and pharmacy carriers'], ['pbms', 'PBMs', 'link', null, 'Pharmacy benefit managers'], ['pharmacies', 'Pharmacies', 'pill', null, 'Specialty pharmacies'], ['pusers', 'Pharmacy Users', 'users', null, 'Pharmacy portal users'], ['facilities', 'Medical Facilities', 'building', null, 'Prescribing facilities'], ['locations', 'Facility Locations', 'pin', null, 'Addresses and fax numbers'], ['fusers', 'Facility Users', 'users', null, 'Provider portal users']] },
   { g: 'Admin', d: 'Access and reporting', items: [['hubusers', 'Hub Users', 'key', null, 'Staff accounts and roles'], ['reports', 'Reports', 'chart', null, 'Operational reports']] }
 ];
-const BUILT = ['dashboard', 'cases', 'case', 'uploads', 'comms', 'acct', 'fax', 'patients', 'patient', 'carriers', 'carrier', 'pbms', 'pbm', 'facilities', 'facility', 'locations', 'expauth', 'expben', 'intake', 'created'];
-const PARENT = { case: 'cases', patient: 'patients', carrier: 'carriers', pbm: 'pbms', facility: 'facilities', intake: 'cases', created: 'cases' };
+const BUILT = ['settings', 'ae', 'expcon', 'pharmacies', 'pusers', 'fusers', 'hubusers', 'reports', 'report', 'dashboard', 'cases', 'case', 'uploads', 'comms', 'acct', 'fax', 'patients', 'patient', 'carriers', 'carrier', 'pbms', 'pbm', 'facilities', 'facility', 'locations', 'expauth', 'expben', 'intake', 'created'];
+const PARENT = { case: 'cases', patient: 'patients', carrier: 'carriers', pbm: 'pbms', facility: 'facilities', intake: 'cases', created: 'cases', pharmacy: 'pharmacies', report: 'reports' };
 const navCount = (n, hot) => n == null ? '' : `<span class="count ${hot ? 'hot' : ''} num">${n}</span>`;
 const routeOn = (k) => S.route === k || PARENT[S.route] === k;
 
@@ -1714,28 +2498,36 @@ function shellB(content) {
 }
 function shellC(content, full) {
   const items = [['dashboard', 'Home', 'dash'], ['cases', 'Cases', 'folder'], ['patients', 'Patients', 'users'], ['uploads', 'Inbox', 'upload', 264], ['expauth', 'Boards', 'clock'], ['facilities', 'Orgs', 'building'], ['reports', 'Reports', 'chart']];
-  return `<div class="app"><nav class="rail" aria-label="Main">${mark(30, '#ffffff', '#cfe6d6')}<div style="height:10px"></div>${items.map(([k, l, i, n]) => `<button class="railbtn ${routeOn(k) ? 'on' : ''}" data-a="go" data-r="${k}" title="${l}">${ic(i, 20)}${l}${n ? `<span class="dot num">${n > 99 ? '99+' : n}</span>` : ''}</button>`).join('')}<span class="sp"></span><button class="railbtn" data-a="toast" data-v="Settings open here">${ic('gear', 20)}Settings</button><span class="avatar" style="background:#fff;color:var(--green-700)">JM</span></nav>
+  return `<div class="app"><nav class="rail" aria-label="Main">${mark(30, '#ffffff', '#cfe6d6')}<div style="height:10px"></div>${items.map(([k, l, i, n]) => `<button class="railbtn ${routeOn(k) ? 'on' : ''}" data-a="go" data-r="${k}" title="${l}">${ic(i, 20)}${l}${n ? `<span class="dot num">${n > 99 ? '99+' : n}</span>` : ''}</button>`).join('')}<span class="sp"></span><button class="railbtn" data-a="settings">${ic('gear', 20)}Settings</button><span class="avatar" style="background:#fff;color:var(--green-700)">JM</span></nav>
   <div class="main"><header class="topbar"><h1 style="font-size:17px">${S.route === 'dashboard' ? 'Home' : 'Cases'}</h1><span class="grow"></span>${util()}</header>${content}</div></div>`;
 }
 
 /* ================= Client notes panel ================= */
 const NOTES_MAP = {
   intake: [['New case follows the Figma intake flow', 'Search for duplicates first, then the same sections as the designs: demographics, prescriber and care team, consent, insurance, prescription, medical necessity, review.'], ['Long steps split into shorter ones', 'Per the wizard rule, 7 long steps became 12 short ones in 7 groups: demographics split into Identity and Contact, care team into Prescriber and Internal team, prescription into Dosing and Details, medical necessity into Diagnosis, History and Documents.'], ['Move freely, errors on revisit', 'From the designer notes: any step can be opened any time. Required fields only turn red when you come back to a step you left incomplete. Review lists what is missing with Fix links.'], ['Forms in modals, no stretched fields', 'Insurance policies are added in a modal. Field widths match their content and the form column is capped so fields never stretch across the screen.'], ['Assumptions to confirm with the client', 'Required: gender, full address, mobile or alternate phone, email or no-email box, prescriber and location, consent method, one policy or uninsured, dosing, refills, written date, dispensing, signed Rx, one primary diagnosis. Optional: internal care team, clinical history, supporting documents.']],
+  ae: [['Adverse events had no home', 'Every AE is listed with seriousness, status and when the safety report is due. Record one from here or from the case.']],
+  expcon: [['Boards', 'Consents ending in the next 90 days, with a one-click renewal link by text or email.']],
+  pharmacies: [['Pharmacies', 'Each pharmacy page lists its open cases with shipment status and its portal users.']],
+  pusers: [['Users in one place', 'Pharmacy, facility and hub users share one pattern: filters, status, and row actions for edit, password reset, resend invite and remove.']],
+  fusers: [['Users in one place', 'Every provider portal user across facilities. Add a user here or from the facility page.']],
+  hubusers: [['Users in one place', 'Hub staff with roles and last sign-in.']],
+  reports: [['Reports', 'Operational reports built from live case data. Each has a chart, a table view and CSV export.']],
+  settings: [['Settings', 'Profile, notifications, work preferences, appearance and out of office. Layout and color theme also live here.']],
   created: [['Confirmation after submit', 'Shows the new case ID, patient, status Requested, assignee and what happens next, with links to the case or to start another.']],
-  uploads: [['Filters stay open, maybe move them to the side', 'Filters live in a panel beside the table and stay open while you work (collapsible). Direction B docks them on the left.'], ['Zebra striping on the uploaded documents table', 'Rows alternate shading, with more vertical padding.'], ['Actions per upload', 'Attach to case is one click on every row. Assign and Archive sit in the row menu and the preview panel.']],
+  uploads: [['Filters stay open, maybe move them to the side', 'Filters live in a panel beside the table and stay open while you work (collapsible). They dock on the left in every direction.'], ['Zebra striping on the uploaded documents table', 'Rows alternate shading, with more vertical padding.'], ['Actions per upload', 'Attach to case is one click on every row. Assign and Archive sit in the row menu and the preview panel.']],
   comms: [['Filters stay open on the side', 'Same side filter panel as Unattached Uploads.'], ['Tiny font', 'Subject and message body are 14px regular in dark navy. Nothing on the page is below 12px.'], ['Hard to see what needs a response', 'Each message shows Action needed or FYI plus who owes a response and by when. Overdue turns red.']],
   acct: [['Same as uploads and communications', 'Side filters that stay open, striped rows, larger type.'], ['Reviewing a request', 'Review opens a side panel with requester and facility details plus Approve and Deny, without leaving the list.']],
   fax: [['Same as uploads and communications', 'Side filters that stay open, striped rows, larger type.'], ['Failed faxes', 'Failed faxes show the reason in the row and can be retried from the side panel.']],
   patients: [['Same issues as Cases', 'Side filters, tighter rows, one status per column, address with the map pin next to it.'], ['Patients general cleanup', 'Patient page shows details with copy buttons, all cases, consent history and coverage on one screen.']],
   carriers: [['Carriers: click through to the cases', 'Case counts link to the carrier page, which lists every case for that carrier. Each row opens the case.']],
   pbms: [['Same pattern as Carriers', 'PBM page lists the cases tied to that PBM and each one opens the case.']],
-  facilities: [['Medical Facilities: missing actions under notes', 'Each note now shows Edit, Highlight and Remove right on the row. Add note sits at the top of the tab.']],
+  facilities: [['Facility details on the left', 'Details sit in the left column. Tabs run Prescribers and users, Locations, Notes, Documents, Cases, and open on Prescribers and users.'], ['Medical Facilities: missing actions under notes', 'Each note shows Edit, Highlight and Remove right on the row. Highlighted notes are marked like a highlighter pen instead of red text.']],
   locations: [['Move the icon next to the address', 'The map pin sits directly beside the street address in every location row.']],
   expauth: [['Boards', 'Expiring authorizations by patient with Reverify actions, or grouped by facility with Email and Print.']],
   expben: [['Boards', 'Same pattern as Expiring Authorizations for benefit verifications.']],
-  dashboard: [['Switch priority of info', 'Work lists (due today, overdue, missing follow-up) now lead. Summary counts moved below.'], ['Authorization requests matter; make them clickable', 'Authorization requests sit beside My work. Every status row and count opens the filtered case list.'], ['Tiny, light font', 'Body text is 14px Roboto Regular in dark navy. Labels are Medium weight, not light gray.'], ['Keep the left nav open by default', 'Direction A opens with the full labeled nav. It can collapse to icons.']],
-  cases: [['Reassign several cases at once', 'Check rows in the Cases table and use Reassign in the bar that appears. Requires a new coordinator and a reason, with an optional handoff note and email.'], ['Shrink the filters', 'About 40 checkboxes are now single-line multi-select dropdowns (A), a docked filter panel (B), or quick tabs (C).'], ['Too much white space; tighten the rows', 'Rows are 40px with zebra striping. One status per column instead of stacked labels. Try the Compact/Comfortable switch.'], ['Reverse Pending PA and Pending Appeal', 'Case status now runs in workflow order: PA submission, PA outcome, appeal submission, appeal outcome.'], ['Make all the filters multi-select dropdowns', 'Every filter is multi-select with live counts and removable chips.'], ['Filters stay open, maybe on the side', 'Direction B keeps filters docked on the left, with a preview panel on the right.']],
-  case: [['Reassign case', 'Click Assigned to in the case header, or use the ... menu. Pick the new coordinator and a reason, add a handoff note, and optionally email them.'], ['Status changes need a reason', 'Changing case status opens a modal with reasons specific to that status. Saving without a reason shows an error. Every change lands in the audit trail.'], ['Too much white space', 'Header is one row plus a status strip. Tabs start above the fold. Read-only sections use tight two-column blocks.'], ['Copy to clipboard on demographics', 'Every demographic field and both IDs have a copy button.'], ['Patient demographics visible with other tabs', 'Demographics stay in a side panel (A), a docked panel (B) or a collapsible band (C) on every tab.'], ['Make prescription a tab, with Manage prescription', 'New Prescription tab holds Manage and Triage actions plus history.'], ['Hide header buttons; remove interim drug status, PAP status, pharmacy, active prescription', 'Header keeps only case status, coverage, authorization, follow-up and owner. The rest moved to their tabs.'], ['Authorization request is clunky; make it a linear stepper; up to 3 appeals', 'Authorizations tab is a step-by-step wizard. Each appeal is its own round, with an appeals-used meter (max 3).'], ['Documents, Messages, Audit trail: white space, make them tables', 'Documents, Faxes and Audit trail are compact striped tables. Messages and notes are a tight feed.'], ['Benefits tab white space', 'Plans are a table. BI details and coverage notes sit side by side.']]
+  dashboard: [['Switch priority of info', 'Work lists (due today, overdue, missing follow-up) now lead. Summary counts moved below.'], ['Authorization requests matter; make them clickable', 'Authorization requests sit beside My work. Every status row and count opens the filtered case list.'], ['Tiny, light font', 'Body text is 14px Roboto Regular in dark navy. Labels are Medium weight, not light gray.'], ['Keep the left nav open by default', 'Direction C (Left nav) opens with the full labeled nav. It can collapse to icons.']],
+  cases: [['Reassign several cases at once', 'Check rows in the Cases table and use Reassign in the bar that appears. Requires a new coordinator and a reason, with an optional handoff note and email.'], ['Shrink the filters', 'About 40 checkboxes are now grouped, collapsible multi-select lists with live counts in a filter panel beside the table.'], ['Too much white space; tighten the rows', 'Rows are 40px with zebra striping. One status per column instead of stacked labels.'], ['Reverse Pending PA and Pending Appeal', 'Case status now runs in workflow order: PA submission, PA outcome, appeal submission, appeal outcome.'], ['Make all the filters multi-select dropdowns', 'Every filter is multi-select with live counts and removable chips.'], ['Filters stay open, maybe on the side', 'Filters dock on the left with a preview panel on the right. In A they tuck behind the page until you open them.']],
+  case: [['Reassign case', 'Click Assigned to in the case header, or use the ... menu. Pick the new coordinator and a reason, add a handoff note, and optionally email them.'], ['Status changes need a reason', 'Changing case status opens a modal with reasons specific to that status. Saving without a reason shows an error. Every change lands in the audit trail.'], ['Too much white space', 'Header is one row plus a status strip. Tabs start above the fold. Read-only sections use tight two-column blocks.'], ['Copy to clipboard on demographics', 'Every demographic field and both IDs have a copy button.'], ['Patient demographics visible with other tabs', 'Demographics stay in the Patient side panel on every tab.'], ['Make prescription a tab, with Manage prescription', 'New Prescription tab holds Manage and Triage actions plus history.'], ['Hide header buttons; remove interim drug status, PAP status, pharmacy, active prescription', 'Header keeps only case status, coverage, authorization, follow-up and owner. The rest moved to their tabs.'], ['Authorization request is clunky; make it a linear stepper; up to 3 appeals', 'Authorizations tab is a step-by-step wizard. Each appeal is its own round, with an appeals-used meter (max 3).'], ['Hover highlight on every tab', 'Rows in Documents, Faxes, Notes, Messages, Audit trail and the rest highlight on hover, same as the Cases table.'], ['Notes: highlight means highlight', 'Highlighted notes get a highlighter-pen background on the text, not red text.'], ['Messages: add message at the top', 'The composer sits above the thread, so the newest message and the reply box are together.'], ['Documents, Messages, Audit trail: white space, make them tables', 'Documents, Faxes and Audit trail are compact striped tables. Messages and notes are a tight feed.'], ['Benefits tab white space', 'Plans are a table. BI details and coverage notes sit side by side.']]
 };
 function notesPanel() {
   const k0 = PARENT[S.route] && S.route !== 'case' ? PARENT[S.route] : S.route; const key = NOTES_MAP[k0] ? k0 : 'dashboard';
@@ -1764,14 +2556,9 @@ function toast(msg) { S.toast = msg; clearTimeout(toastT); toastT = setTimeout((
 /* ================= Render ================= */
 const isTop = () => S.dir !== 'A';
 const isModern = () => 'DEFGH'.includes(S.dir);
-const DIRS = { H: ['Layered cards', 'Side panels sit as cards behind the page with only their icons peeking out. Open one and the page shrinks back to reveal it.'], G: ['Floating panels', 'Modern with side panels turned edge-on like cards. Click one to fold it out as a detached, floating panel.'], E: ['Modern, green panels', 'Modern with the green brand gradient on both side panels, left and right.'], F: ['Dark', 'A dark take on Modern: deep green-black surfaces, glowing brand accents, same layout and motion.'], D: ['Modern', 'Same layout as A with brand gradients, a softly moving ambient background, frosted glass panels and smoother motion.'], A: ['Left nav', 'Refined version of today\'s layout. Full labeled nav, open by default. Patient panel docks on the right.'], B: ['Top nav + white', 'White top nav with mega menus. Frees the full width for docked filter, patient and activity panels.'], C: ['Top nav + green', 'Green top nav, and every side panel takes the same green theme as the nav.'] };
-function reviewBar() {
-  return `<div class="review" role="region" aria-label="Prototype controls"><b>HealthPacer Hub</b><span>Direction</span><div class="seg">${[['D', 'A'], ['C', 'B'], ['B', 'C'], ['A', 'D'], ['E', 'E'], ['F', 'F'], ['G', 'G'], ['H', 'H']].map(([k, shown]) => `<button data-a="dir" data-v="${k}" aria-pressed="${S.dir === k}">${shown} · ${DIRS[k][0]}</button>`).join('')}</div>
-  <span class="why">${DIRS[S.dir][1]}</span><span class="sp"></span>
-  
-  <button class="pill-btn" data-a="notes" aria-pressed="${S.notesPanel}">${ic('check', 14)} Feedback addressed</button></div>`;
-}
-let LAST_MEGA = null, CLOSING = false; const ANIM_K = {}, ANIM_T = {};
+const DIRS = { H: ['Modern, layered cards', 'Side panels sit as cards behind the page with only their icons peeking out. Open one and the page shrinks back to reveal it.'], G: ['Floating panels', 'Modern with side panels turned edge-on like cards. Click one to fold it out as a detached, floating panel.'], E: ['Modern, green panels', 'Modern with the green brand gradient on both side panels, left and right.'], F: ['Dark', 'A dark take on Modern: deep green-black surfaces, glowing brand accents, same layout and motion.'], D: ['Modern, panels', 'Brand gradients, a softly moving ambient background, frosted glass panels and smooth motion. Side panels dock beside the page.'], A: ['Left nav', 'Refined version of today\'s layout. Full labeled nav, open by default. Patient panel docks on the right.'], B: ['Top nav + white', 'White top nav with mega menus. Frees the full width for docked filter, patient and activity panels.'], C: ['Top nav + green', 'Green top nav, and every side panel takes the same green theme as the nav.'] };
+function reviewBar() { return ''; }
+let LAST_MKEY = null, LAST_DKEY = null; let LAST_MEGA = null, CLOSING = false; const ANIM_K = {}, ANIM_T = {};
 function render() {
   const open = document.querySelector('.mega');
   if (open && !S.mega && !CLOSING && !open.classList.contains('closing') && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -1790,7 +2577,7 @@ function render() {
   const V = { uploads: viewUploads, comms: viewComms, acct: viewAcct, fax: viewFax, patients: viewPatients, patient: viewPatient, facilities: viewFacilities, facility: viewFacility, locations: viewLocations,
     carriers: () => orgList('carriers', 'Carriers', CARRIERS, 'carrier', 'carriers'), pbms: () => orgList('pbms', 'PBMs', PBMS, 'pbm', 'PBMs'),
     carrier: () => orgDetail(CARRIERS.find(x => x.id === S.detail.org) || CARRIERS[0], 'carriers', 'Carriers'), pbm: () => orgDetail(PBMS.find(x => x.id === S.detail.org) || PBMS[0], 'pbms', 'PBMs'),
-    expauth: () => viewBoard('Authorization'), expben: () => viewBoard('Benefits'), intake: viewIntake, created: viewCreated };
+    expauth: () => viewBoard('Authorization'), expben: () => viewBoard('Benefits'), intake: viewIntake, created: viewCreated , ...ROUTES_X };
   document.body.classList.toggle('nav-white', S.dir === 'B');
   document.body.classList.toggle('theme-green', 'CDEFGH'.includes(S.dir));
   document.body.classList.toggle('theme-modern', isModern());
@@ -1816,7 +2603,11 @@ function render() {
   LAST_MEGA = isTop() ? S.mega : null;
   const drw = drawer(); LAST_DRAWER = S.drawer ? S.drawer.type + S.drawer.id : null;
   const PRE_DOCKS = dockWidths();
-  document.getElementById('root').innerHTML = reviewBar() + body + drw + popMenu() + bulkBar() + (S.notesPanel ? notesPanel() : '') + modal() + (S.toast ? `<div class="toast" role="status">${ic('check', 18)}${esc(S.toast)}</div>` : '');
+  const MKEY = S.modal ? JSON.stringify([S.modal.type, S.modal.id ?? '', S.modal.step ?? '']) : null, DKEY = S.drawer ? S.drawer.type + S.drawer.id : null;
+  const KEEP = {}; document.querySelectorAll('#root .modal [id], #root .drawer [id]').forEach(el => { if (!/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.type === 'file') return; const inModal = !!el.closest('.modal'); if ((inModal && MKEY === LAST_MKEY) || (!inModal && DKEY === LAST_DKEY)) KEEP[el.id] = el.type === 'checkbox' || el.type === 'radio' ? { c: el.checked } : { v: el.value }; });
+  const stillModal = MKEY && MKEY === LAST_MKEY; LAST_MKEY = MKEY; LAST_DKEY = DKEY;
+  document.getElementById('root').innerHTML = reviewBar() + body + drw + popMenu() + bulkBar() + (S.notesPanel ? notesPanel() : '') + modal().replace('<div class="modal-wrap"', stillModal ? '<div class="modal-wrap still"' : '<div class="modal-wrap"') + (S.toast ? `<div class="toast" role="status">${ic('check', 18)}${esc(S.toast)}</div>` : '');
+  Object.entries(KEEP).forEach(([id, o]) => { const el = document.getElementById(id); if (!el || el.dataset.fresh) return; if ('c' in o) el.checked = o.c; else el.value = o.v; });
   if (fid) { const el = document.getElementById(fid); if (el) { el.focus(); try { if (pos != null) el.setSelectionRange(pos, pos); } catch (e) { } } }
   if (typeof afterRender === 'function') afterRender();
   animateDocks(PRE_DOCKS);
@@ -1839,14 +2630,14 @@ document.addEventListener('click', (e) => {
   const a = t.dataset.a, v = t.dataset.v, k = t.dataset.k;
   if (a === 'col') { S.cols[k] = !S.cols[k]; S.menu = 'cols'; render(); return; }
   if (a === 'opt') { const s = S.f[k]; s.has(v) ? s.delete(v) : s.add(v); render(); return; }
-  if (t.tagName === 'A' || t.tagName === 'BUTTON' || t.tagName === 'TR' || t.classList.contains('wi') || t.classList.contains('qitem') || t.classList.contains('modal-wrap')) e.preventDefault();
+  if (t.tagName === 'A' || t.tagName === 'BUTTON' || t.tagName === 'TR' || t.classList.contains('wi') || t.classList.contains('qitem') || (t.classList.contains('modal-wrap') && e.target === t)) e.preventDefault();
   if (a !== 'ms' && a !== 'menu' && !t.closest('.ms-pop') && !t.closest('.menu-pop')) { S.openMs = null; S.menu = null; }
   if (a !== 'rowmenu' && !t.closest('.pop-fixed')) S.pop = null;
   if (a !== 'rowmenu' && t.closest('.pop-fixed')) S.pop = null;
   const c = byId(S.caseId);
   if (EXTRA[a]) { if (t.tagName !== 'INPUT') e.preventDefault(); EXTRA[a](t, e); render(); return; }
   switch (a) {
-    case 'dir': if (!DIRS[v]) break; if (v === 'H' && S.dir !== 'H') { S.dockL = false; S.dockR = false; } S.dir = v; S.mega = null; try { localStorage.setItem('hp-dir3', v); } catch (x) { } break;
+    case 'dir': if (!DIRS[v] || !'HDA'.includes(v)) break; if (v === 'H' && S.dir !== 'H') { S.dockL = false; S.dockR = false; } if (v !== 'H' && S.dir === 'H') { S.dockL = true; S.dockR = true; } S.dir = v; S.mega = null; try { localStorage.setItem('hp-dir4', v); } catch (x) { } break;
     case 'go': return go(t.dataset.r);
     case 'case': e.stopPropagation(); return openCase(t.dataset.id);
     case 'sel': S.sel = t.dataset.id; S.dockR = true; break;
@@ -1886,7 +2677,7 @@ document.addEventListener('click', (e) => {
     case 'mclose-bg': if (e.target === t) S.modal = null; else return; break;
     case 'mdone': S.modal = null; toast(v); break;
     case 'toast': S.mega = null; toast(v); break;
-    case 'notes': S.notesPanel = !S.notesPanel; break;
+    case 'notes': S.notesPanel = !S.notesPanel; S.menu = null; break;
     case 'density': document.body.classList.toggle('comfy', v === '1'); try { localStorage.setItem('hp-comfy', v); } catch (x) { } break;
     case 'arx': S.expanded[v] = !S.expanded[v]; break;
     case 'arfile': { const [, rd] = curRound(c); rd.pendingFile = v ? (rd.kind === 'pa' ? 'PA_form_completed.pdf' : `Appeal${rd.n}_packet.pdf`) : null; break; }
