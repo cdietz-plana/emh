@@ -2462,8 +2462,8 @@ afterRender = function () { _afterRender2(); if (FOCUS_MOVE) focusPlay(); };
 /* ================= Round 6: client comments (Katie) ================= */
 /* ---- Versions: review rounds live side by side; latest is the default ---- */
 const VERSIONS = [
-  ['v3', 'V3', 'HCP portal', 'Adds the HCP portal (program color, blue by default), a switch between the Hub and the portal, and the eMax Design Pattern Library'],
-  ['v2', 'V2', 'Client review 1', 'Bento dashboard, green only, pinned cases, substatus, patient ID link, prescription link, new Manage prescription, filter scroll fix'],
+  ['v3', 'V3', 'Review round 2', 'HCP portal built (use the Hub / Portal toggle), eMax Design Pattern Library, Back to dashboard from Work one by one'],
+  ['v2', 'V2', 'Review round 1', 'Bento dashboard, green only, pinned cases, substatus, patient ID link, prescription link, new Manage prescription, filter scroll fix'],
   ['v1', 'V1', 'Initial concepts', 'All dashboard styles and color themes as first presented']
 ];
 S.ver = VERSIONS[0][0]; try { const v = localStorage.getItem('hp-ver'); if (v && VERSIONS.some(x => x[0] === v)) S.ver = v; } catch (e) { }
@@ -2583,8 +2583,8 @@ caseHeader = function (c) {
 /* ================= V3: HCP portal + app switch ================= */
 const isV3 = () => S.ver === 'v3';
 S.app = 'hub'; try { if (localStorage.getItem('hp-app') === 'hcp') S.app = 'hcp'; } catch (e) { }
-if (!isV3()) S.app = 'hub';
 const isHCP = () => S.app === 'hcp';
+const HCP_VERSIONS = [['p1', 'V1', 'First build', 'HCP portal first build, following the approved portal designs and the Hub patterns']];
 { const L = CASES.filter(c => c.facility === 'Hollywood Doctors'); const cl = L.filter(c => ['Closed', 'Complete'].includes(c.caseStatus)); if (cl[0]) { cl[0].caseStatus = 'Requested'; cl[0].ar = 'None'; cl[0].coverage = 'Pending'; } if (cl[1]) { cl[1].caseStatus = 'Intake'; cl[1].ar = 'None'; cl[1].coverage = 'Pending'; } }
 const HCP_FAC = FACILITIES.find(f => f.name === 'Hollywood Doctors') || FACILITIES[0];
 const HCP_USER = { name: 'Tina Alvarez', honor: 'Ms.', first: 'Tina', last: 'Alvarez', role: 'Facility administrator', email: 'tina.alvarez@hollywooddoctors.example', mobile: '(310) 555-0144', phone: '(310) 709-4563', fax: '(310) 709-4555' };
@@ -2628,6 +2628,7 @@ const HNAV = () => [['h-dash', 'Dashboard', 'dash'], ['h-new', 'New Patient/Case
 const hOn = (k) => S.route === k || HPARENT[S.route] === k || (k === 'h-new' && ['intake', 'created'].includes(S.route));
 const hNavBtn = ([k, l, i, n]) => `<button class="navitem ${hOn(k) ? 'on' : ''}" ${k === 'h-new' ? 'data-a="hnew"' : `data-a="go" data-r="${k}"`} title="${l}">${ic(i, 18)}<span>${l}</span>${n ? `<span class="count num">${n}</span>` : ''}</button>`;
 const hBrand = () => `${logo(true)}<span class="portaltag">Provider portal</span>`;
+const appToggle = (cls = '') => { const short = cls === 'inbar'; return `<div class="apptoggle ${cls}" role="radiogroup" aria-label="Switch between the HealthPacer Hub and the HCP Portal"><button role="radio" aria-checked="${!isHCP()}" data-a="appset" data-v="hub" title="HealthPacer Hub (staff)">${short ? '' : ic('building', 14) + ' '}${short ? 'Hub' : 'HealthPacer Hub'}</button><button role="radio" aria-checked="${isHCP()}" data-a="appset" data-v="hcp" title="HCP Portal (providers)">${short ? '' : ic('users', 14) + ' '}${short ? 'HCP Portal' : 'HCP Portal'}</button></div>`; };
 const _shellA0 = shellA, _shellB0 = shellB, _util0h = util, _acct0 = acctMenu;
 shellA = function (content) {
   if (!isHCP()) return _shellA0(content);
@@ -2648,22 +2649,22 @@ shellB = function (content) {
     <span style="flex:1"></span><button class="btn primary hnewbtn" data-a="hnew" title="New patient / case">${ic('plus', 16)} New case</button>${util()}</div></header>${content}`;
 };
 util = function () {
-  if (!isHCP()) return _util0h();
+  if (!isHCP()) return _util0h().replace('<div class="util">', `<div class="util">${appToggle('inbar')}`);
   const n = HMSGS.filter(m => m.unread).length;
-  return `<div class="util"><label class="search">${ic('search', 16)}<span class="sr">Search</span><input placeholder="Search patients or cases" data-a="gosearch"><kbd>/</kbd></label><div class="notifwrap"><button class="iconbtn" aria-label="Notifications${n ? `, ${n} unread` : ''}" data-a="go" data-r="h-notif">${ic('bell', 20)}${n ? '<span class="dot"></span>' : ''}</button></div>${acctMenu()}</div>`;
+  return `<div class="util">${appToggle('inbar')}<label class="search">${ic('search', 16)}<span class="sr">Search</span><input placeholder="Search patients or cases" data-a="gosearch"><kbd>/</kbd></label><div class="notifwrap"><button class="iconbtn" aria-label="Notifications${n ? `, ${n} unread` : ''}" data-a="go" data-r="h-notif">${ic('bell', 20)}${n ? '<span class="dot"></span>' : ''}</button></div>${acctMenu()}</div>`;
 };
 acctMenu = function () {
   if (!isHCP()) {
     let h = _acct0();
-    if (isV3() && S.menu === 'acct') h = h.replace(`<button data-a="settings">`, `<button data-a="appswitch" class="appsw">${ic('arrowr', 16)} Switch to HCP Portal <span class="soon">Provider view</span></button><button data-a="go" data-r="patterns">${ic('grid', 16)} eMax Design Pattern Library</button><hr><button data-a="settings">`);
+    if (S.menu === 'acct') h = h.replace(`<div class="acct-sub">${ic('clock', 16)} Versions</div>`, `<div class="acct-sub">${ic('sidebar', 16)} App</div>${appToggle('inmenu')}<hr><div class="acct-sub">${ic('clock', 16)} Versions</div>`).replace(`<button data-a="settings">`, `<button data-a="go" data-r="patterns">${ic('grid', 16)} eMax Design Pattern Library</button><hr><button data-a="settings">`);
     return h;
   }
   const open = S.menu === 'acct';
   return `<div class="acctwrap"><button class="avatarbtn" data-a="menu" data-v="acct" aria-expanded="${open}" aria-label="Account menu"><span class="avatar">TA</span></button>${open ? `<div class="menu-pop acctmenu" role="menu">
     <div class="acct-h"><span class="avatar">TA</span><div><b>${esc(HCP_USER.name)}</b><span>${esc(HCP_USER.role)} · ${esc(HCP_FAC.name)}</span></div></div><hr>
+    <div class="acct-sub">${ic('sidebar', 16)} App</div>${appToggle('inmenu')}<hr>
     <div class="acct-sub">${ic('clock', 16)} Versions</div>
-    <div class="dirlist verlist">${VERSIONS.map(([k, l, n, d], i) => `<button data-a="ver" data-v="${k}" aria-pressed="${S.ver === k}" title="${esc(d)}"><span class="dl-k">${l}</span><span class="vt">${n}${i === 0 ? ' <em>Latest</em>' : ''}</span>${S.ver === k ? ic('check', 14) : ''}</button>`).join('')}</div><hr>
-    <button data-a="appswitch" class="appsw">${ic('arrowr', 16)} Switch to HealthPacer Hub <span class="soon">Staff view</span></button>
+    <div class="dirlist verlist">${HCP_VERSIONS.map(([k, l, n, d], i) => `<button aria-pressed="true" title="${esc(d)}"><span class="dl-k">${l}</span><span class="vt">${n}${i === 0 ? ' <em>Latest</em>' : ''}</span>${ic('check', 14)}</button>`).join('')}</div><hr>
     <button data-a="go" data-r="patterns">${ic('grid', 16)} eMax Design Pattern Library</button><hr>
     <button data-a="go" data-r="h-profile">${ic('users', 16)} My profile</button>
     <div class="acct-sub">${ic('sidebar', 16)} Layout</div>
@@ -2889,6 +2890,7 @@ extraModal = function (m, wrap) {
 };
 const hId = (sel) => (val(sel) || '').split(' ')[0];
 Object.assign(EXTRA, {
+  appset(t) { if ((t.dataset.v === 'hcp') !== isHCP()) EXTRA.appswitch(); },
   appswitch() { S.app = isHCP() ? 'hub' : 'hcp'; try { localStorage.setItem('hp-app', S.app); } catch (e) { } S.menu = null; S.drawer = null; S.modal = null; applyApp(); go(isHCP() ? 'h-dash' : 'dashboard'); toast(isHCP() ? 'Switched to the HCP portal' : 'Switched to the HealthPacer Hub'); },
   hhue(t) { S.hue = t.dataset.v; try { localStorage.setItem('hp-hcphue', S.hue); } catch (e) { } applyHue(); S.menu = 'acct'; },
   hnew() { EXTRA.newcase(); },
@@ -2928,12 +2930,12 @@ notesPanel = function () {
   const k = S.route; if (!NOTES_HCP[k] && !(isHCP() && ['intake', 'created'].includes(k))) return _notesPanelH();
   const items = NOTES_HCP[k] || [['New patient / case', 'Same intake as the Hub, without the internal care team step. Search for the patient first, then the steps from the designs.']];
   return `<aside style="position:fixed;right:16px;top:60px;z-index:70;width:min(420px,calc(100vw - 32px));max-height:calc(100vh - 80px);overflow:auto" class="card" aria-label="Feedback addressed"><div class="card-h"><h3>${isHCP() ? 'HCP portal: what this screen follows' : 'About this screen'}</h3><button class="iconbtn" data-a="notes" aria-label="Close">${ic('x', 16)}</button></div>
-  <div>${items.map(([n, fix]) => `<div style="padding:10px 16px;border-bottom:1px solid var(--line-2);display:grid;grid-template-columns:18px 1fr;gap:4px 10px"><span style="color:var(--green)">${ic('check', 16)}</span><b style="font:600 13.5px var(--f-head)">${esc(n)}</b><span></span><span style="font-size:13px;color:var(--ink-2)">${esc(fix)}</span></div>`).join('')}</div><div class="card-f muted">Showing ${VERSIONS.find(x => x[0] === S.ver)[1]} · ${VERSIONS.find(x => x[0] === S.ver)[2]}.</div></aside>`;
+  <div>${items.map(([n, fix]) => `<div style="padding:10px 16px;border-bottom:1px solid var(--line-2);display:grid;grid-template-columns:18px 1fr;gap:4px 10px"><span style="color:var(--green)">${ic('check', 16)}</span><b style="font:600 13.5px var(--f-head)">${esc(n)}</b><span></span><span style="font-size:13px;color:var(--ink-2)">${esc(fix)}</span></div>`).join('')}</div><div class="card-f muted">${isHCP() ? 'HCP portal · V1 · First build' : `HealthPacer Hub · ${VERSIONS.find(x => x[0] === S.ver)[1]} · ${VERSIONS.find(x => x[0] === S.ver)[2]}`}.</div></aside>`;
 };
 
 /* Version switch keeps the app valid; start in the right app */
 const _verH = EXTRA.ver;
-EXTRA.ver = function (t, e) { _verH(t, e); if (!isV3() && isHCP()) { S.app = 'hub'; try { localStorage.setItem('hp-app', 'hub'); } catch (x) { } go('dashboard'); } applyApp(); S.menu = 'acct'; };
+EXTRA.ver = function (t, e) { _verH(t, e); applyApp(); S.menu = 'acct'; };
 applyApp();
 if (isHCP()) S.route = 'h-dash';
 /* New cases entered in the portal belong to this facility */
