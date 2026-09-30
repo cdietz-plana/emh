@@ -3001,6 +3001,291 @@ drawer = function () { const d = S.drawer; if (d && d.type === 'doc' && !d.doc) 
 Object.assign(EXTRA, {
   plgo(t) { S.detail.plsec = t.dataset.v; const el = document.getElementById('pl-' + t.dataset.v); if (el) window.scrollTo({ top: el.getBoundingClientRect().top + scrollY - 76, behavior: 'smooth' }); }
 });
+/* ================= V4: Katie review round 3 ================= */
+VERSIONS.unshift(['v4', 'V4', 'Review round 3', 'Messages with multiple recipients and threads, benefit fields, fax previews with cover sheets, account requests verified on the facility, details-left record pages, user details, intake fixes']);
+S.ver = VERSIONS[0][0]; try { const v = localStorage.getItem('hp-ver'); if (v && VERSIONS.some(x => x[0] === v)) S.ver = v; } catch (e) { }
+applyVersion();
+const vnum = () => parseInt(S.ver.slice(1));
+const isV4 = () => vnum() >= 4 && !isHCP();
+const dateUS = (iso) => iso ? usOf(iso) : '';
+
+/* ---------- Date pickers in intake (all versions) ---------- */
+const _ikSearchV4 = ikSearch;
+ikSearch = function () {
+  const s = S.ik.search;
+  return _ikSearchV4().replace(/<input id="iks-dob"[^>]*>/, `<input id="iks-dob" type="date" data-in="iksdate" data-k="dob" value="${isoOf(s.dob)}" max="${isoOf(fmt(TODAY))}">`);
+};
+const _ikBodyV4 = ikBody;
+ikBody = function (id) {
+  let h = _ikBodyV4(id);
+  if (id === 'rx') h = h.replace(/<input id="ik-written"[^>]*>/, `<input id="ik-written" type="date" data-in="ikdate" data-k="written" value="${isoOf(ikv('written'))}" max="${isoOf(fmt(TODAY))}">`);
+  return h;
+};
+document.addEventListener('input', (e) => {
+  const t = e.target; if (!t.dataset || !['iksdate', 'ikdate'].includes(t.dataset.in) || !S.ik) return;
+  const v = dateUS(t.value); if (!v) return;
+  if (t.dataset.in === 'iksdate') { S.ik.search.dob = v; if (S.ik.searchErr) delete S.ik.searchErr.dob; S.ik.search.done = false; }
+  else S.ik.d[t.dataset.k] = v;
+  render();
+}, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.dataset && e.target.dataset.in === 'iksdate') { e.preventDefault(); EXTRA.iksearch(); render(); } });
+
+/* ---------- Intake review: drug name, every diagnosis (all versions) ---------- */
+const _ikReviewV4 = ikReview;
+ikReview = function () {
+  const d = S.ik.d, I = S.ik;
+  const row = (l, v) => `<div><span class="lbl">${l}</span><span class="v ${v ? '' : 'none'}">${v ? esc(v) : 'Not provided'}</span></div>`;
+  let h = _ikReviewV4();
+  h = h.replace('<div class="rvgrid"><div><span class="lbl">Schedule</span>', `<div class="rvgrid">${row('Drug', 'EMX-300 300 mg tablets')}<div><span class="lbl">Schedule</span>`);
+  const dxRows = (codes, list) => [...codes].map(c => { const f = list.find(x => x[0] === c); return f ? `${c} ${f[1]}` : c; }).join(', ');
+  h = h.replace(/(<h3>Diagnosis<\/h3>[\s\S]*?<div class="rvgrid">)[\s\S]*?(<\/div><\/section>)/, (m, a, b) => a + row('Primary', dxRows(I.dx, DX_PRIMARY)) + row('Secondary', dxRows(I.dx2, DX_SECONDARY)) + row('Other', d.dxOther || '') + b);
+  return h;
+};
+
+/* ---------- Every intake policy lands on the case (all versions) ---------- */
+{ const _iks = EXTRA.iksubmit; EXTRA.iksubmit = function (t, e) {
+  const I = S.ik; const pols = I ? I.policies.slice() : [], unins = I && I.d.uninsured, dx2 = I ? [...I.dx2] : [], other = I ? I.d.dxOther : '';
+  _iks(t, e);
+  const c = S.createdId && byId(S.createdId); if (!c) return;
+  const inf = info(c);
+  if (!unins && pols.length) inf.plans = pols.map((p, i) => { const cr = CARRIERS.concat(PBMS).find(x => x.name === p.carrier) || {}; return { order: ['Primary', 'Secondary', 'Tertiary'][i] || 'Additional', name: p.carrier, type: p.type || 'Commercial', member: p.policy, group: p.group, bin: [p.bin, p.pcn].filter(Boolean).join(' / '), eff: '1/1/2026 to 12/31/2026', cov: 'Pending', phone: cr.phone || '', fax: cr.fax || '', holder: p.holder || `${c.first} ${c.last}`, holderDob: p.rel === 'Self' || !p.rel ? fmt(c.dob) : '', rel: p.rel || 'Self' }; });
+  if (dx2.length) inf.medical.dx2 = dx2.map(x => (DX_SECONDARY.find(d => d[0] === x) || [x, ''])[1] + ` (${x})`).join(', ');
+  if (other) inf.medical.dx2 = [inf.medical.dx2, `Other: ${other}`].filter(Boolean).join(', ');
+}; }
+
+/* ---------- Log call: name of the person (all versions) ---------- */
+const _xmV4 = extraModal;
+extraModal = function (m, wrap) {
+  let h = _xmV4(m, wrap);
+  if (m.type === 'logcall' && h) h = h.replace(/(<div class="input[^"]*"><label class="lbl" for="clnum">)/, `${inp('clname', 'Name of the person', { req: 1, err: (m.err || {}).name, phText: 'Who you spoke with' })}$1`);
+  if ((m.type === 'attach' || m.type === 'assign') && h) h = h.replace('</div><div class="m-f">', `${inp('updesc', 'Description', { opt: 1, v: (UPLOADS.find(x => x.id === m.id) || {}).desc || '', phText: 'What this document is, for the team' })}</div><div class="m-f">`);
+  return h;
+};
+{ const _lc = EXTRA.logcallsave; EXTRA.logcallsave = function (t, e) {
+  const nm = val('clname'), who = val('clwho');
+  if (!nm) { const err = { name: 'Add the name of the person' }; if (!who) err.who = 'Choose who you spoke with'; if (!val('clout')) err.out = 'Choose an outcome'; if (!val('clnote')) err.note = 'Add a short summary'; S.modal.err = err; return; }
+  const n0 = NOTES.length; _lc(t, e);
+  if (NOTES.length > n0) { NOTES[0][3] = NOTES[0][3].replace(who, `${nm} (${who.replace(/ \((.+)\)$/, '$1')})`); auditLog('Notes', 'Call logged', `Spoke with ${nm}`); }
+}; }
+
+/* ---------- Unattached uploads: description added by the team (all versions) ---------- */
+['attachsave', 'assignsave'].forEach(k => { const f = EXTRA[k]; EXTRA[k] = function (t, e) { const u = UPLOADS.find(x => x.id === t.dataset.id); const d = val('updesc'); f(t, e); if (u && d !== u.desc) { u.desc = d; auditLog('Uploads', 'Description updated', u.file); } }; });
+const _viewUploadsV4 = viewUploads;
+viewUploads = function () {
+  if (!isV4()) return _viewUploadsV4();
+  return listPage('uploads', {
+    title: 'Unattached Uploads', sub: 'Files sent by providers that are not on a case yet', noun: 'uploads', filters: UP_F, rows: UPLOADS.filter(u => !u.done), searchPh: 'Search file name, description, facility',
+    text: r => [r.file, r.desc, r.facility, r.by].join(' '),
+    cols: [
+      ['Document', 'auto', r => `<div class="doccell">${ic('file', 18)}<span><a href="#" data-a="drawer" data-v="upload" data-id="${r.id}" class="strong">${esc(r.file)}</a><span class="sub">${esc(r.type)} · ${r.size}</span></span></div>`],
+      ['Description', '240px', r => r.desc ? `<span class="wrapcell">${esc(r.desc)}</span>` : `<button class="link-btn" data-a="modal" data-v="assign" data-id="${r.id}">Add description</button>`],
+      ['Facility', '190px', r => `${esc(r.facility)}<span class="sub">${esc(r.by)}</span>`],
+      ['Uploaded', '98px', r => `<span class="num">${fmt(r.date)}</span><span class="sub num">${fmtT(r.date)}</span>`],
+      ['Assigned to', '112px', r => r.assigned ? esc(r.assigned) : '<span class="muted">Unassigned</span>'],
+      ['', '124px', r => `<div class="rowacts"><button class="btn sm primary" data-a="modal" data-v="attach" data-id="${r.id}">Attach</button><button class="btn sm" data-a="rowmenu" data-v="${r.id}" aria-label="More actions">${ic('more', 16)}</button></div>`, 'r']
+    ], opts: { rowAct: r => `data-a="drawer" data-v="upload" data-id="${r.id}"`, sel: r => S.drawer && S.drawer.id === r.id }
+  });
+};
+
+/* ---------- Messages: Add message button, many recipients, threads, resolve, no delete (V4) ---------- */
+const msgMeta = (m) => { if (!m[5]) { const tag = (m[4] || [])[0] || ''; m[5] = { subj: m[1] === 'HCP' ? 'Labs for appeal' : m[1] === 'Pharmacy' ? 'Shipment hold' : 'Case update', type: /appeal|could your|please/i.test(m[3]) ? 'Action needed' : 'FYI', to: tag.includes('provider') ? ['Prescriber'] : tag.includes('pharmacy') ? ['Specialty pharmacy'] : m[1] === 'Hub' ? ['Internal team'] : ['Hub team'], by: '', replies: [], resolved: false }; } return m[5]; };
+const MSG_TO = (c) => [['Prescriber', c.prescriber], ['Office contact', ((FACILITIES.find(f => f.name === c.facility) || { users: [] }).users.find(u => u.role !== 'Prescriber') || { name: 'Office contact' }).name], ['Field reimbursement manager', 'Brandon Fields'], ['Patient advocate', 'Alicia Moreno'], ['Specialty pharmacy', c.pharmacy], ['Internal team', 'Hub staff']];
+const _tabMessagesV4 = tabMessages;
+tabMessages = function () {
+  if (!isV4()) return _tabMessagesV4();
+  const c = byId(S.caseId);
+  return `${tph('Messages', `<span class="muted" style="font-size:12.5px">Sent messages cannot be deleted</span><button class="btn primary" data-a="modal" data-v="msgnew">${ic('plus', 16)} Add message</button>`)}
+  <div class="feed">${MESSAGES.map((m, i) => { const [w, role, d, t] = m; const M = msgMeta(m); return `<div class="msg mthread ${M.resolved ? 'resolved' : ''} ${S.flash === 'msg' + i ? 'flash' : ''}"><span class="avatar" style="${role === 'Hub' ? '' : 'background:var(--navy)'}">${w.replace('Dr. ', '').split(' ').map(x => x[0]).join('').slice(0, 2)}</span>
+    <div class="hd"><b>${esc(w)}</b><span class="pill nodot ${role === 'Hub' ? 't-ok' : role === 'HCP' ? 't-info' : 't-violet'}">${role}</span><span class="pill ${M.type === 'FYI' ? 't-info' : 't-warn'}">${M.type}</span>${M.resolved ? '<span class="pill t-ok">Resolved</span>' : ''}<span class="muted num">${esc(d)}</span></div>
+    <span></span><p><b>${esc(M.subj)}.</b> ${esc(t)}</p>
+    <div class="mto">To: ${M.to.map(esc).join(', ')}${M.by && !M.resolved ? ` · <span class="${dayDiff(new Date(M.by)) < 0 ? 'overdue' : ''}">Respond by ${esc(M.by)}</span>` : ''}</div>
+    ${M.replies.length ? `<div class="mreplies">${M.replies.map(r => `<div class="mreply"><span class="avatar sm">${r.who.split(' ').map(x => x[0]).join('').slice(0, 2)}</span><div><div class="hd"><b>${esc(r.who)}</b><span class="muted num">${esc(r.when)}</span></div><p>${esc(r.text)}</p></div></div>`).join('')}</div>` : ''}
+    <div class="macts"><button class="btn sm" data-a="modal" data-v="msgreply2" data-id="${i}">${ic('send', 14)} Reply</button><button class="btn sm ghost" data-a="msgres" data-i="${i}">${ic('check', 14)} ${M.resolved ? 'Reopen' : 'Mark resolved'}</button><button class="btn sm ghost" data-a="copy" data-v="${esc(t)}">${ic('copy', 14)} Copy</button></div></div>`; }).join('')}</div>`;
+};
+const _xmV4b = extraModal;
+extraModal = function (m, wrap) {
+  const c = byId(S.caseId), e = m.err || {}, cancel = `<button class="btn" data-a="mclose">Cancel</button>`;
+  if (m.type === 'msgnew') { const sel = S.msgTo2 || new Set(['Prescriber']); S.msgTo2 = sel;
+    return wide(wrap('Add message', `<div class="input ${e.to ? 'err' : ''}"><span class="lbl">Send to <span class="req">*</span></span><div class="rcpgrid">${MSG_TO(c).map(([r, n]) => `<label class="rcp ${sel.has(r) ? 'on' : ''}"><input type="checkbox" data-a="msgto2" data-v="${esc(r)}" ${sel.has(r) ? 'checked' : ''}><span><b>${esc(r)}</b><span class="muted">${esc(n)}</span></span></label>`).join('')}</div>${e.to ? errField('Choose at least one recipient') : ''}</div>
+      <div class="polgrid">${inp('mnsubj', 'Subject', { req: 1, err: e.subj, v: S.mnd?.subj })}${inp('mntype', 'Type', { opts: ['FYI', 'Action needed'], ph: false, v: S.mnd?.type || 'FYI' })}${inp('mnby', 'Respond by', { type: 'date', opt: 1, v: S.mnd?.by, help: 'Shown to recipients for Action needed messages' })}</div>
+      ${inp('mnbody', 'Message', { area: 1, h: 110, req: 1, err: e.body, v: S.mnd?.body })}`, `${cancel}<button class="btn primary" data-a="msgnewsave">${ic('send', 16)} Send message</button>`)); }
+  if (m.type === 'msgreply2') { const msg = MESSAGES[+m.id]; return wrap(`Reply to ${esc(msg[0])}`, `<div class="note-banner" style="background:var(--zebra);color:var(--ink-2)">${ic('chat', 16)}<span><b>${esc(msgMeta(msg).subj)}.</b> ${esc(msg[3])}</span></div>${inp('mrbody', 'Reply', { area: 1, h: 110, req: 1, err: e.body })}${chk('mrres', 'Mark the message resolved', false)}`, `${cancel}<button class="btn primary" data-a="msgreplysave" data-id="${m.id}">${ic('send', 16)} Send reply</button>`); }
+  if (m.type === 'facreq') { const r = ACCT.find(x => x.id === m.id); const [st, city] = (r.addr || ', ').split(/, (.+)/);
+    return wide(wrap('New facility request', `<div class="note-banner">${ic('info', 16)}<span>Verify the facility with the office first. Approving creates the facility with the details below, adds ${esc(r.name)} and sends an invite.</span></div>
+      <div class="kv-sub">Requested by</div><div class="fields">${fld('Name', r.name, false)}${fld('Role', r.role, false)}${fld('Email', r.email)}${fld('Phone', r.phone)}${r.npi ? fld('NPI', r.npi) : ''}</div>
+      <div class="kv-sub">Facility details</div><div class="polgrid">${inp('fnname', 'Facility name', { req: 1, err: e.name, v: r.facility, span: 1 })}${inp('fntype', 'Facility type', { opts: [...new Set(FAC_TYPES)], ph: false })}${inp('fnnpi', 'NPI', { req: 1, err: e.npi, v: r.npi })}${inp('fnst', 'Street address', { req: 1, err: e.st, v: st, span: 1 })}${inp('fncity', 'City, state, zip', { req: 1, err: e.city, v: city })}${inp('fnphone', 'Phone', { req: 1, err: e.phone, v: r.phone })}${inp('fnfax', 'Fax', { opt: 1 })}${inp('fntax', 'Tax ID', { req: 1, err: e.tax })}${inp('fncontact', 'Primary contact', { opt: 1, v: r.name, span: 1 })}</div>${chk('fnver', 'I verified this facility with the office', false)}${e.ver ? errField('Confirm you verified the facility first') : ''}`,
+      `<button class="btn danger" data-a="acctdeny" data-id="${r.id}" style="margin-right:auto">Deny request</button>${cancel}<button class="btn primary" data-a="facreqsave" data-id="${r.id}">${ic('check', 16)} Create facility and approve</button>`)); }
+  if (m.type === 'othercov') { const I = info(c); return wrap('Other coverage', `${inp('ocyes', 'Does the carrier show other coverage?', { opts: ['No', 'Yes'], ph: false, v: I.other?.has || 'No' })}${inp('ocname', 'Other insurer', { v: I.other?.name || '' })}${inp('ocnote', 'Notes', { area: 1, h: 70, opt: 1, v: I.other?.note || '' })}`, `${cancel}<button class="btn primary" data-a="othercovsave">Save</button>`); }
+  return _xmV4b(m, wrap);
+};
+Object.assign(EXTRA, {
+  msgto2(t) { const r = t.dataset.v; S.mnd = { subj: val('mnsubj'), type: val('mntype'), by: val('mnby'), body: val('mnbody') }; S.msgTo2.has(r) ? S.msgTo2.delete(r) : S.msgTo2.add(r); if (S.modal.err) delete S.modal.err.to; },
+  msgnewsave() {
+    const to = [...(S.msgTo2 || [])], subj = val('mnsubj'), body = val('mnbody'), type = val('mntype'), by = val('mnby'), err = {};
+    if (!to.length) err.to = 1; if (!subj) err.subj = 'Add a subject'; if (!body) err.body = 'Write the message';
+    if (Object.keys(err).length) { S.mnd = { subj, type, by, body }; S.modal.err = err; return; }
+    const c = byId(S.caseId), names = MSG_TO(c); const toLbl = to.map(r => { const n = (names.find(x => x[0] === r) || [])[1]; return r === 'Internal team' ? r : `${n} (${r.toLowerCase()})`; });
+    MESSAGES.unshift([ME, 'Hub', nowStamp(), body, [to.includes('Internal team') && to.length === 1 ? 'Internal' : 'Shared'], { subj, type, to: toLbl, by: by ? usOf(by) : '', replies: [], resolved: false }]);
+    auditLog('Messages', `${type} message sent`, `${subj} to ${toLbl.join(', ')}`); flash('msg0'); S.modal = null; S.msgTo2 = null; S.mnd = null; toast(`Message sent to ${to.length} ${to.length === 1 ? 'recipient' : 'recipients'}`);
+  },
+  msgreplysave(t) { const m = MESSAGES[+t.dataset.id], v = val('mrbody'); if (!v) { S.modal.err = { body: 'Write a reply' }; return; } const M = msgMeta(m); M.replies.push({ who: ME, when: nowStamp(), text: v }); if (val('mrres')) M.resolved = true; auditLog('Messages', 'Reply sent', M.subj); flash('msg' + t.dataset.id); S.modal = null; toast(M.resolved ? 'Reply sent and marked resolved' : 'Reply sent'); },
+  msgres(t) { const M = msgMeta(MESSAGES[+t.dataset.i]); M.resolved = !M.resolved; auditLog('Messages', M.resolved ? 'Message resolved' : 'Message reopened', M.subj); toast(M.resolved ? 'Marked resolved' : 'Reopened'); },
+  othercovsave() { const I = info(byId(S.caseId)); I.other = { has: val('ocyes'), name: val('ocname'), note: val('ocnote') }; auditLog('Benefits', 'Other coverage updated', I.other.has === 'Yes' ? I.other.name : 'None'); S.modal = null; toast('Other coverage saved'); }
+});
+
+/* ---------- Benefits: every field, PBM labeled, other coverage (V4) ---------- */
+function planDefaults(c, p) { const cr = CARRIERS.concat(PBMS).find(x => x.name === p.name) || {}; if (p.order === 'Pharmacy') p.order = 'PBM'; if (p.phone == null) p.phone = cr.phone || '1 (888) 555-1112'; if (p.fax == null) p.fax = cr.fax || '1 (888) 555-1113'; if (p.holder == null) p.holder = `${c.first} ${c.last}`; if (p.holderDob == null) p.holderDob = fmt(c.dob); if (p.rel == null) p.rel = 'Self'; return p; }
+const _tabBenefitsV4 = tabBenefits;
+tabBenefits = function (c) {
+  if (!isV4()) return _tabBenefitsV4(c);
+  const I = info(c), b = I.bi; I.plans.forEach(p => planDefaults(c, p)); const oc = I.other || { has: 'No', name: '' };
+  return `${tph('Benefits', `<span class="muted" style="font-size:12.5px">Verified ${b.date} by ${esc(b.by)}</span><button class="btn" data-a="modal" data-v="bi">${ic('refresh', 16)} Re-verify</button><button class="btn" data-a="modal" data-v="addplan">${ic('plus', 16)} Add plan</button>`)}
+  <div class="blocks">${I.plans.map((p, i) => `<div class="block ${S.flash === 'plan' + i ? 'flash' : ''}" data-sec="${esc(p.order)}"><div class="section-t">${ic('card', 15)}${esc(p.order)} · ${esc(p.name)}<span class="sp"></span>${pill(p.cov || c.coverage)}<button class="btn sm ghost" data-a="modal" data-v="addplan" data-id="${i}">${ic('edit', 14)} Edit</button></div>
+    <div class="fields">${fld('Type', p.type, false)}${fld('Member ID', p.member)}${fld('Group', p.group || 'None')}${fld('BIN / PCN', p.bin || 'None')}${fld('Phone', p.phone)}${fld('Fax', p.fax)}${fld('Cardholder', `${p.holder} (${p.rel})`, false)}${fld('Cardholder DOB', p.holderDob)}${fld('Effective', p.eff, false)}</div></div>`).join('')}
+  <div class="block" data-sec="Other coverage"><div class="section-t">${ic('shield', 15)}Other coverage<span class="sp"></span><button class="btn sm ghost" data-a="modal" data-v="othercov">${ic('edit', 14)} Edit</button></div><div class="fields">${fld('Carrier shows other coverage', oc.has, false)}${fld('Other insurer', oc.has === 'Yes' ? oc.name : 'None', false)}${oc.note ? fld('Notes', oc.note, false) : ''}</div></div>
+  <div class="block" data-sec="Benefit investigation"><div class="section-t">${ic('card', 15)}Benefit investigation</div><div class="fields">${fld('Deductible', b.ded, false)}${fld('Out of pocket max', b.oop, false)}${fld('Specialty copay', b.copay, false)}${fld('PA required', b.pa, false)}${fld('Step therapy', b.step, false)}${fld('Quantity limit', b.ql, false)}</div></div>
+  <div class="block full" data-sec="Coverage notes"><div class="section-t">${ic('chat', 15)}Coverage notes</div><div class="feed" style="margin:0 -16px">${I.covnotes.map(([d, w, t]) => `<div class="msg" style="grid-template-columns:1fr"><div class="hd"><b>${w}</b><span class="muted num">${d}</span></div><p style="grid-column:1">${esc(t)}</p></div>`).join('')}</div></div></div>`;
+};
+/* plan form gets phone, fax, cardholder (all versions) */
+{ const _xm = extraModal; extraModal = function (m, wrap) { const c = byId(S.caseId); const p = m.type === 'addplan' && m.id != null && m.id !== '' ? planDefaults(c, info(c).plans[+m.id]) : {}; let h = _xm(m, wrap); if (m.type === 'addplan' && h) { h = h.replace(/(<div class="input[^"]*"><label class="lbl" for="plfrom">)/, `${inp('plphone', 'Plan phone', { v: p.phone })}${inp('plfax', 'Plan fax', { v: p.fax })}${inp('plholder', 'Cardholder name', { v: p.holder })}${inp('plrel', 'Relationship to cardholder', { opts: ['Self', 'Spouse', 'Child', 'Other'], ph: false, v: p.rel || 'Self' })}${inp('plhdob', 'Cardholder DOB', { type: 'date', v: isoOf(p.holderDob || '') })}$1`).replace(/<div class="input[^"]*"><label class="lbl" for="plorder">[\s\S]*?<\/select>(<span class="ikerr">[\s\S]*?<\/span>)?<\/div>/, inp('plorder', 'Order', { v: p.order, opts: ['Primary', 'Secondary', 'Tertiary', 'PBM'], req: 1, err: (m.err || {}).order })); } return h; }; }
+{ const _ps = EXTRA.plansave; EXTRA.plansave = function (t, e) { const extra = { phone: val('plphone'), fax: val('plfax'), holder: val('plholder'), rel: val('plrel'), holderDob: dateUS(val('plhdob')) }; const c = byId(S.caseId), I = info(c); const n = I.plans.length; _ps(t, e); if (S.modal) return; const p = t.dataset.id !== '' ? I.plans[+t.dataset.id] : I.plans[n]; if (p) Object.assign(p, extra); }; }
+
+/* ---------- Fax preview: cover sheet then every document (V4) ---------- */
+function faxParts(f) {
+  if (f[6]) return f[6];
+  const inb = f[1] === 'Inbound';
+  const docs = inb ? [{ name: /Summit/.test(f[2]) ? 'Denial letter' : 'Signed enrollment form', pages: Math.max(1, f[4] - 1) }] : /appeal/i.test(f[2]) ? [{ name: 'Appeal letter', pages: 2 }, { name: 'Appeal2_packet_with_labs.pdf', pages: Math.max(1, f[4] - 3) }] : /PA/.test(f[2]) ? [{ name: 'PA_Summit_EMX300_signed.pdf', pages: Math.max(1, f[4] - 1) }] : [{ name: 'Case summary', pages: Math.max(1, f[4] - 1) }];
+  return { cover: true, docs, note: inb ? '' : 'Please see the attached documents for this patient. Call 1-555-867-5309 with questions.' };
+}
+Object.assign(EXTRA, { faxopen(t) { const i = +t.dataset.i; if (!isV4()) { const f = FAXES[i]; openDoc({ name: `Fax_${f[0].split(' ')[0].replace(/\//g, '-')}_${f[2].replace(/\W+/g, '_')}.pdf`, type: `${f[1]} fax`, date: f[0], pages: f[4], src: `${f[1] === 'Outbound' ? 'Sent to' : 'Received from'} ${f[2]} · ${f[3]} · ${f[5]}` }); return; } S.drawer = { type: 'faxview', id: 'F' + i, i, page: 1 }; }, faxpg(t) { const d = S.drawer; d.page = Math.max(1, Math.min(d.total || 1, t.dataset.to ? +t.dataset.to : d.page + +t.dataset.v)); } });
+{ const _sf = EXTRA.sendfaxsave; EXTRA.sendfaxsave = function (t, e) { const docs = S.faxDocs ? [...S.faxDocs].map(i => ({ name: DOCS[i][0], pages: /packet|appeal/i.test(DOCS[i][0]) ? 6 : 2 })) : []; const cover = val('fxcover'), note = val('fxmsg'); const n = FAXES.length; _sf(t, e); if (FAXES.length > n) FAXES[0][6] = { cover, docs, note }; }; }
+const _drawerV4 = drawer;
+drawer = function () {
+  const d = S.drawer; if (!d || d.type !== 'faxview') return _drawerV4();
+  const f = FAXES[d.i], P = faxParts(f), c = byId(S.caseId);
+  const parts = [...(P.cover ? [{ name: 'Fax cover sheet', pages: 1, cover: true }] : []), ...P.docs]; let acc = 0; parts.forEach(p => { p.start = acc + 1; acc += p.pages; }); d.total = acc;
+  const pg = Math.min(d.page || 1, acc), cur = parts.find(p => pg >= p.start && pg < p.start + p.pages);
+  const lines = (n) => Array.from({ length: n }, (_, i) => `<i style="width:${[92, 100, 84, 97, 70, 100, 88, 60][i % 8]}%"></i>`).join('');
+  const inb = f[1] === 'Inbound';
+  const page = cur.cover ? `<div class="vpage" style="--z:1"><div class="vhead"><b>FAX</b><span>${inb ? esc(f[2]) : 'eMAXHealth Patient Services'}</span></div><div class="vgrid"><span>To</span><span>${inb ? 'eMAXHealth Patient Services' : esc(f[2])}</span><span>Fax</span><span>${inb ? '1 (800) 555-0199' : esc(f[3])}</span><span>From</span><span>${inb ? esc(f[2]) : ME}</span><span>Date</span><span>${esc(f[0])}</span><span>Pages</span><span>${acc} including cover</span><span>Re</span><span>${esc(fullName(c))} · ${c.id}</span></div>${P.note ? `<p style="font-size:11px;margin:6px 0">${esc(P.note)}</p>` : lines(3)}<div class="vsig"><em>Confidential health information. If received in error, call 1-555-867-5309.</em></div></div>`
+    : `<div class="vpage" style="--z:1"><div class="vhead"><b>${esc(cur.name.replace(/\.[a-z]+$/i, '').replace(/_/g, ' ').toUpperCase())}</b><span>Page ${pg - cur.start + 1} of ${cur.pages}</span></div>${lines(pg === cur.start ? 10 : 14)}<div class="vsig">${pg === cur.start + cur.pages - 1 ? '<em>Signature on file</em>' : ''}</div></div>`;
+  const body = `<div class="fields">${fld(inb ? 'Received from' : 'Sent to', `${f[2]} · ${f[3]}`, false)}${fld('Date', f[0], false)}${fld('Status', f[5], false)}</div>
+    <div class="faxview"><div class="faxparts"><div class="lbl" style="padding:0 4px 6px">In this fax</div>${parts.map(p => `<button class="${p === cur ? 'on' : ''}" data-a="faxpg" data-to="${p.start}">${ic(p.cover ? 'fax' : 'file', 14)}<span>${esc(p.name)}<span class="muted">${p.pages} ${p.pages === 1 ? 'page' : 'pages'}</span></span></button>`).join('')}</div>
+    <div class="viewer"><div class="vbar"><button class="iconbtn" data-a="faxpg" data-v="-1" ${pg <= 1 ? 'disabled' : ''} aria-label="Previous page">${ic('chevl', 16)}</button><span class="num">Page ${pg} of ${acc}</span><button class="iconbtn" data-a="faxpg" data-v="1" ${pg >= acc ? 'disabled' : ''} aria-label="Next page">${ic('chevr', 16)}</button><span class="sp"></span><span class="muted" style="font-size:12px">${esc(cur.name)}</span></div><div class="vpage-wrap">${page}</div></div></div>`;
+  const foot = `<button class="btn" data-a="docprint">Print</button><span style="flex:1"></span>${inb ? `<button class="btn primary" data-a="modal" data-v="sendfax">${ic('fax', 16)} Forward</button>` : `<button class="btn primary" data-a="modal" data-v="sendfax">${ic('refresh', 16)} Send again</button>`}`;
+  const enter = LAST_DRAWER !== d.type + d.id && !LAST_DRAWER;
+  return `<div class="drawer-scrim ${enter ? 'enter' : ''}" data-a="drawerclose"></div><aside class="drawer wide ${enter ? 'enter' : ''}" role="dialog" aria-label="Fax"><div class="drawer-h"><h2>${inb ? 'Received fax' : 'Sent fax'} · ${esc(f[2])}</h2><button class="iconbtn" data-a="drawerclose" aria-label="Close">${ic('x', 18)}</button></div><div class="drawer-b">${body}</div><div class="drawer-f">${foot}</div></aside>`;
+};
+
+/* ---------- Account requests: verify on the facility, new facilities get the full form (V4) ---------- */
+{ const _dr = EXTRA.drawer; EXTRA.drawer = function (t, e) {
+  if (isV4() && t.dataset.v === 'acct') { const r = ACCT.find(x => x.id === t.dataset.id); if (r && r.status === 'Requested') { e.stopPropagation(); S.pop = null; if (r.isNew) { S.modal = { type: 'facreq', id: r.id }; return; } const f = FACILITIES.find(x => x.name === r.facility); if (f) { S.pendingReq = r.id; S.detail.facility = f.id; S.tab2.facility = 'users'; S.route = 'facility'; scrollTo(0, 0); return; } } }
+  return _dr(t, e);
+}; }
+const _viewFacilityV4 = viewFacility;
+viewFacility = function () {
+  allUsers(); let h = _viewFacilityV4();
+  const r = S.pendingReq && ACCT.find(x => x.id === S.pendingReq); const f = FACILITIES.find(x => x.id === S.detail.facility) || FACILITIES[0];
+  if (isV4() && r && r.status === 'Requested' && r.facility === f.name) {
+    const ok = S.reqVerified === r.id;
+    h = h.replace('<section class="card"><div class="casehead">', `<section class="card reqbanner"><div class="rb-h">${ic('userplus', 18)}<div><b>Account request pending: ${esc(r.name)}</b><span class="muted">${esc(r.role)} · ${esc(r.email)} · ${esc(r.phone)}${r.npi ? ` · NPI ${r.npi}` : ''} · Requested ${fmt(r.date)}</span></div></div>
+      <div class="rb-b"><span class="muted" style="font-size:13px">Call the office to confirm this person works here before approving. Existing users are listed below.</span><label class="opt" style="padding:0"><input type="checkbox" data-a="reqver" data-id="${r.id}" ${ok ? 'checked' : ''}><span>I verified this request with the office</span></label><span class="sp"></span><button class="btn danger" data-a="acctdeny" data-id="${r.id}">Deny</button><button class="btn primary" data-a="reqok" data-id="${r.id}" ${ok ? '' : 'disabled'}>${ic('check', 16)} Approve and invite</button></div></section>
+      <section class="card"><div class="casehead">`);
+  }
+  if (isV4()) h = h.replace(/<tr class="([^"]*)" ?>(<td class="[^"]*wrap"><span class="strong">([^<]+)<\/span><span class="sub">([^<]+)<\/span>)/g, (m, cl, td, n, em) => { const u = f.users.find(x => x.email === em); return u ? `<tr class="click ${cl}" data-a="userview" data-v="${esc(u.ref)}">${td}` : m; });
+  return h;
+};
+Object.assign(EXTRA, {
+  reqver(t) { S.reqVerified = t.checked ? t.dataset.id : null; },
+  reqok(t) { const r = ACCT.find(x => x.id === t.dataset.id); const f = FACILITIES.find(x => x.name === r.facility); r.status = 'Approved'; f.users.push({ name: r.name, email: r.email, role: r.role, status: 'Invite pending', phone: r.phone, npi: r.npi }); allUsers(); userMeta(f.users[f.users.length - 1], true); S.pendingReq = null; S.reqVerified = null; toast(`Approved. Invite sent to ${r.email}`); },
+  facreqsave(t) { const r = ACCT.find(x => x.id === t.dataset.id); if (!val('fnver')) { S.modal.err = Object.assign({}, S.modal.err, { ver: 1 }); return; } if (!val('fntax')) { S.modal.err = Object.assign({}, S.modal.err, { tax: 'Required for a new facility' }); return; } EXTRA.facnewsave(); if (S.modal) return; const f = FACILITIES[FACILITIES.length - 1]; f.users.push({ name: r.name, email: r.email, role: r.role, status: 'Invite pending', phone: r.phone, npi: r.npi }); allUsers(); userMeta(f.users[f.users.length - 1], true); r.status = 'Approved'; toast(`${f.name} created. Invite sent to ${r.email}`); }
+});
+{ const _ads = EXTRA.acctdenysave; EXTRA.acctdenysave = function (t, e) { _ads(t, e); if (!S.modal) S.pendingReq = null; }; }
+
+/* ---------- User details: everything on file (V4) ---------- */
+const UMETA = new Map();
+function userMeta(u, fresh) {
+  if (UMETA.has(u) && !fresh) return UMETA.get(u);
+  const n = [...(u.name || 'x')].reduce((a, ch) => a + ch.charCodeAt(0), 0);
+  const pre = u.role === 'Prescriber';
+  const created = addDays(TODAY, fresh ? 0 : -(40 + n % 400)), inviteSent = fresh ? TODAY : addDays(created, 0);
+  const m = { phone: u.phone || `(615) 555-0${100 + n % 900}`, fax: u.fax || `(615) 555-1${100 + n % 800}`, lastLogin: fresh || u.status === 'Invite pending' || u.last === 'Never' ? null : addDays(TODAY, -(n % 20)), inviteSent, inviteStatus: u.status === 'Invite pending' ? 'Sent, not accepted' : u.status === 'Inactive' ? 'Deactivated' : 'Accepted', accessCode: u.status === 'Invite pending' ? String(100000 + (n * 7919) % 899999) : null, created, pwReset: fresh || u.status === 'Invite pending' ? null : addDays(TODAY, -(n % 90) - 3),
+    npi: pre ? (u.npi || String(1000000000 + (n * 104729) % 899999999)) : null, sln: pre ? `${pk16(['CA', 'TN', 'GA', 'NY'])}-${String(10000 + (n * 31) % 89999)}` : null, tin: pre ? `${String(10 + n % 89)}-${String(1000000 + (n * 97) % 8999999)}` : null, licType: pre ? (/^Dr\./.test(u.name) ? ['MD', 'DO'][n % 2] : /, (NP|PA)/.test(u.name) ? u.name.match(/, (NP|PA)/)[1] : 'NP') : null, specialty: pre ? (u.fac && /Endocrin/.test(u.fac.type + u.fac.name) ? 'Endocrinology' : ['Endocrinology', 'Internal medicine', 'Family medicine'][n % 3]) : null };
+  UMETA.set(u, m); return m;
+}
+const dOrNever = (d) => d ? fmt(d) : '<span class="muted">Never</span>';
+Object.assign(EXTRA, { userview(t, e) { if (e) e.stopPropagation(); S.drawer = { type: 'user', id: t.dataset.v }; S.pop = null; } });
+{ const _dr2 = drawer; drawer = function () {
+  const d = S.drawer; if (!d || d.type !== 'user') return _dr2();
+  const u = findUser(d.id); if (!u) return ''; const m = userMeta(u); const pre = u.role === 'Prescriber';
+  const org = u.fac ? u.fac.name : u.org || 'eMAXHealth Patient Services';
+  const body = `<div style="display:flex;gap:10px;align-items:center"><span class="avatar" style="width:44px;height:44px">${u.name.replace('Dr. ', '').split(' ').map(x => x[0]).join('').slice(0, 2)}</span><div><b style="font:600 16px var(--f-head)">${esc(u.name)}</b><div class="muted" style="font-size:13px">${esc(u.role)} · ${esc(org)}</div></div><span class="sp" style="flex:1"></span>${statusPill(u.status)}</div>
+    <div class="kv-sub">Contact</div><div class="fields">${fld('Email', u.email)}${fld('Phone', m.phone)}${fld('Fax', m.fax)}</div>
+    ${pre ? `<div class="kv-sub">Prescriber</div><div class="fields">${fld('NPI', m.npi)}${fld('State license number (SLN)', m.sln)}${fld('Tax ID (TIN)', m.tin)}${fld('Licensure type', m.licType, false)}${fld('Specialty', m.specialty, false)}</div>` : ''}
+    <div class="kv-sub">Account</div><div class="fields"><div class="fld"><span class="lbl">Created</span><span class="val num">${fmt(m.created)}</span><span></span></div><div class="fld"><span class="lbl">Invite sent</span><span class="val num">${dOrNever(m.inviteSent)}</span><span></span></div><div class="fld"><span class="lbl">Invite status</span><span class="val">${esc(m.inviteStatus)}</span><span></span></div>${m.accessCode ? fld('Access code', m.accessCode) : '<div class="fld"><span class="lbl">Access code</span><span class="val muted">Only shown for open invites</span><span></span></div>'}<div class="fld"><span class="lbl">Last login</span><span class="val num">${dOrNever(m.lastLogin)}</span><span></span></div><div class="fld"><span class="lbl">Last password reset</span><span class="val num">${dOrNever(m.pwReset)}</span><span></span></div></div>`;
+  const foot = `<button class="btn danger" data-a="modal" data-v="userrm" data-id="${esc(u.ref)}">Remove</button><span style="flex:1"></span>${u.status !== 'Active' ? `<button class="btn" data-a="modal" data-v="reinvite" data-id="${esc(u.ref)}">${ic('mail', 16)} Resend invite</button>` : `<button class="btn" data-a="modal" data-v="pwreset" data-id="${esc(u.ref)}">${ic('key', 16)} Password reset</button>`}<button class="btn primary" data-a="useredit" data-v="${esc(u.ref)}">${ic('edit', 16)} Edit</button>`;
+  const enter = LAST_DRAWER !== d.type + d.id && !LAST_DRAWER;
+  return `<div class="drawer-scrim ${enter ? 'enter' : ''}" data-a="drawerclose"></div><aside class="drawer ${enter ? 'enter' : ''}" role="dialog" aria-label="${esc(u.name)}"><div class="drawer-h"><h2>User details</h2><button class="iconbtn" data-a="drawerclose" aria-label="Close">${ic('x', 18)}</button></div><div class="drawer-b">${body}</div><div class="drawer-f">${foot}</div></aside>`;
+}; }
+{ const _um = EXTRA.usermail; EXTRA.usermail = function (t, e) { const u = findUser(t.dataset.id); _um(t, e); const m = userMeta(u); if (t.dataset.v === 'pwreset') m.pwReset = TODAY; else { m.inviteSent = TODAY; m.inviteStatus = 'Sent, not accepted'; m.accessCode = String(100000 + Math.floor(Math.random() * 899999)); } if (S.drawer && S.drawer.type === 'user') S.drawer = { ...S.drawer }; }; }
+/* user edit panel covers the prescriber fields too */
+{ const E = EDITS.user; const f0 = E.fields, s0 = E.save; E.fields = (u) => { const m = userMeta(u); const base = f0(u).concat([['phone', 'Phone', { v: m.phone, w: 220 }], ['fax', 'Fax', { v: m.fax, w: 220 }]]); return u.role === 'Prescriber' ? base.concat([['npi', 'NPI', { v: m.npi, w: 200 }], ['sln', 'State license number', { v: m.sln, w: 200 }], ['tin', 'Tax ID', { v: m.tin, w: 200 }], ['licType', 'Licensure type', { v: m.licType, opts: ['MD', 'DO', 'NP', 'PA'], ph: false }], ['specialty', 'Specialty', { v: m.specialty }]]) : base; }; E.save = (u, v) => { const m = userMeta(u); ['phone', 'fax', 'npi', 'sln', 'tin', 'licType', 'specialty'].forEach(k => { if (k in v) { m[k] = v[k]; delete v[k]; } }); s0(u, v); }; }
+/* user lists: click a row for details, plus last login and invite columns */
+const _userTableV4 = userTable;
+userTable = function (rows, withOrg, orgLabel) {
+  if (!isV4()) return _userTableV4(rows, withOrg, orgLabel);
+  return dtable([
+    ['Name', 'auto', u => `<span class="strong">${esc(u.name)}</span><span class="sub">${esc(u.email)}</span>`],
+    ...(withOrg ? [[orgLabel, '200px', u => u.fac ? esc(u.fac.name) : esc(u.org || 'eMAXHealth')]] : []),
+    ['Role', '170px', u => esc(u.role)], ['Phone', '140px', u => `<span class="num">${userMeta(u).phone}</span>`],
+    ['Status', '160px', u => `${statusPill(u.status)}<span class="sub num">${u.status === 'Invite pending' ? `Invite sent ${fmt(userMeta(u).inviteSent)}` : `Created ${fmt(userMeta(u).created)}`}</span>`],
+    ['Last login', '110px', u => `<span class="num">${dOrNever(userMeta(u).lastLogin)}</span>`],
+    ['', '110px', u => splitAct('u' + u.ref), 'r']
+  ], rows, { rowAct: u => `data-a="userview" data-v="${esc(u.ref)}"` });
+};
+
+/* ---------- Details on the left: patient and carrier / PBM pages (V4) ---------- */
+const _viewPatientV4 = viewPatient;
+viewPatient = function () {
+  if (!isV4()) return _viewPatientV4();
+  const p = patientOf(S.detail.patient) || PATIENTS[0]; const c = p.c; const cases = p.cases.map(byId).filter(Boolean);
+  const cov = cases.flatMap(x => info(x).plans.map(pl => ({ x, pl: planDefaults(x, pl) })));
+  const rxh = cases.flatMap(x => { const R = rxOf(x); return [{ x, r: { received: R.cur.received, med: R.cur.med, qty: R.cur.qty, triage: R.cur.triage, file: R.cur.file }, cur: true }, ...R.hist.map(r => ({ x, r }))]; });
+  const h = _viewPatientV4();
+  const head = h.slice(0, h.indexOf('<div class="caselayout">'));
+  return `${head}<div class="caselayout side-left"><div class="sidecol"><section class="card"><div class="card-h"><h3>Patient details</h3><button class="btn sm ghost" data-a="edit" data-v="patient">${ic('edit', 14)} Edit</button></div><div class="card-b kvp">${patientFields(c)}</div></section></div>
+  <div class="stack">
+    <section class="card"><div class="card-h"><h2>Cases</h2><span class="muted num" style="font-size:13px">${cases.length}</span></div>${dtable([['Case', '120px', x => `<a href="#" data-a="case" data-id="${x.id}" class="strong">${x.id}</a><span class="sub num">Opened ${fmt(x.start)}</span>`], ['Prescriber', 'auto', x => `${esc(x.prescriber)}<span class="sub">${esc(x.facility)}</span>`], ['Case status', '210px', x => `${pill(x.caseStatus)}${x.sub ? `<span class="sub">${esc(x.sub)}</span>` : ''}`], ['Coverage', '140px', x => pill(x.coverage)], ['Follow-up', '120px', x => followCell(x)]], cases, { rowAct: x => `data-a="case" data-id="${x.id}"` })}</section>
+    <section class="card"><div class="card-h"><h2>Coverage</h2><span class="muted" style="font-size:12.5px">Every insurer across this patient's cases</span></div>${dtable([['Insurer', 'auto', o => `<span class="strong">${esc(o.pl.name)}</span><span class="sub">${esc(o.pl.order)} · ${esc(o.pl.type)}</span>`], ['Member ID', '140px', o => `<span class="mono">${esc(o.pl.member)}</span>`], ['Effective', '190px', o => `<span class="num">${esc(o.pl.eff)}</span>`], ['Case', '100px', o => `<a href="#" data-a="case" data-id="${o.x.id}" class="num">${o.x.id}</a>`], ['Outcome', '130px', o => pill(o.pl.cov || o.x.coverage)]], cov, { empty: 'No insurance on file.' })}</section>
+    <section class="card"><div class="card-h"><h2>Prescription history</h2></div>${dtable([['Received', '120px', o => `<span class="num">${esc(o.r.received)}</span>${o.cur ? '<span class="sub">Current</span>' : ''}`], ['Medication', 'auto', o => esc(o.r.med)], ['Qty', '70px', o => `<span class="num">${esc(o.r.qty)}</span>`, 'r'], ['Case', '100px', o => `<a href="#" data-a="case" data-id="${o.x.id}" class="num">${o.x.id}</a>`], ['Triage', '120px', o => pill(o.r.triage)], ['Document', '220px', o => docLink(o.r.file, { type: 'Prescription', date: o.r.received })]], rxh)}</section>
+    <section class="card"><div class="card-h"><h2>Consent history</h2></div>${dtable([['Date', '130px', x => `<span class="num">${x[0]}</span>`], ['Event', 'auto', x => x[1]], ['By', '180px', x => x[2]]], [['7/29/2026', 'Consent signed (HIPAA and program)', 'Marketta Howie'], ['7/29/2026', 'Texting declined, voicemail allowed', 'Marketta Howie']])}</section>
+  </div></div></div>`;
+};
+const _orgDetailV4 = orgDetail;
+orgDetail = function (o, back, backLabel) {
+  const h = _orgDetailV4(o, back, backLabel); if (!isV4()) return h;
+  const i = h.indexOf('<div class="caselayout">'), j = h.indexOf('<div class="sidecol">'); if (i < 0 || j < 0) return h;
+  const cases = h.slice(i + '<div class="caselayout">'.length, j), side = h.slice(j, h.length - 12);
+  return h.slice(0, i) + '<div class="caselayout side-left">' + side + cases + '</div></div>';
+};
+
+/* ---------- Notes panel for V4 ---------- */
+const NOTES_V4 = {
+  case: [['Messages to several people, with threads', 'Add message opens a window: pick one or more recipients, FYI or Action needed, a respond-by date. Replies thread under the message, messages can be resolved, and sent messages cannot be deleted.'], ['Name of the person on a logged call', 'Log call now asks for the name of the person you spoke with.'], ['Benefits: all fields', 'Each plan shows phone, fax, cardholder and cardholder DOB. The second plan is labeled PBM. Other coverage has its own section.'], ['Fax preview shows what was sent', 'Opening a fax shows the cover sheet, then every document in order, with a list to jump between them.']],
+  intake: [['Calendar for dates', 'Date of birth on the search and the Rx written date use a calendar.'], ['Review shows the drug and every diagnosis', 'Drug name in Dosing; primary, secondary and Other diagnoses listed.'], ['All insurances carry over', 'Every policy entered in intake shows on the new case Benefits tab.']],
+  uploads: [['Description column', 'Add a description when assigning or attaching; it shows as its own column.']],
+  acct: [['Verify before approving', 'Review opens the facility with the request at the top. Approve is enabled after you confirm you verified it with the office. New facilities open the full facility form.']],
+  patients: [['Details on the left, all coverage, prescription history', 'Patient page shows details on the left, every insurer across cases with effective dates, and prescription history.']],
+  carriers: [['Details on the left', 'Carrier and PBM pages show details on the left and cases on the right.']],
+  pbms: [['Details on the left', 'Same as Carriers.']],
+  facilities: [['User details', 'Click any user to see everything on file: contact, invite status and access code, created, last login, last password reset, and NPI, SLN, TIN, licensure type and specialty for prescribers.']],
+  hubusers: [['User details', 'Click any user to see everything on file.']], fusers: [['User details', 'Click any user to see everything on file.']], pusers: [['User details', 'Click any user to see everything on file.']]
+};
+
+/* ---------- Brand mark in the bento hero tile (V4). BRANDMARK is a data URI, set once the asset is in. ---------- */
+const BRANDMARK = typeof BRANDMARK_SRC !== 'undefined' ? BRANDMARK_SRC : '';
+const _dashBentoV4 = dashBento;
+dashBento = function () { const h = _dashBentoV4(); return isV4() && BRANDMARK ? h.replace('<section class="btile b-hero"', `<section class="btile b-hero brandmark" style="--brandmark:url('${BRANDMARK}')"`) : h; };
 /* ================= Navigation model ================= */
 const NAV = [
   { g: 'Tools', d: 'Inbound work waiting to be filed or answered', items: [['uploads', 'Unattached Uploads', 'upload', 2, 'Files from providers not yet on a case'], ['comms', 'Communications', 'chat', 3, 'Provider and pharmacy messages'], ['acct', 'Account Requests', 'userplus', 0, 'New portal account approvals'], ['fax', 'Fax Transmissions', 'fax', 259, 'Inbound and outbound fax log', 'hot']] },
@@ -3084,7 +3369,7 @@ function notesPanel() {
   const k0 = PARENT[S.route] && S.route !== 'case' ? PARENT[S.route] : S.route; const key = NOTES_MAP[k0] ? k0 : 'dashboard';
   return `<aside style="position:fixed;right:16px;top:60px;z-index:70;width:min(420px,calc(100vw - 32px));max-height:calc(100vh - 80px);overflow:auto" class="card" aria-label="Client feedback addressed">
   <div class="card-h"><h3>Feedback addressed on this screen</h3><button class="iconbtn" data-a="notes" aria-label="Close">${ic('x', 16)}</button></div>
-  <div>${[...(S.ver !== 'v1' ? (NOTES_V2[key] || []).map(x => ['V2 · ' + x[0], x[1]]) : []), ...NOTES_MAP[key]].map(([n, fix]) => `<div style="padding:10px 16px;border-bottom:1px solid var(--line-2);display:grid;grid-template-columns:18px 1fr;gap:4px 10px"><span style="color:var(--green)">${ic('check', 16)}</span><b style="font:600 13.5px var(--f-head)">${esc(n)}</b><span></span><span style="font-size:13px;color:var(--ink-2)">${esc(fix)}</span></div>`).join('')}</div>
+  <div>${[...(parseInt(S.ver.slice(1)) >= 4 ? (NOTES_V4[key] || []).map(x => ['V4 · ' + x[0], x[1]]) : []), ...(S.ver !== 'v1' ? (NOTES_V2[key] || []).map(x => ['V2 · ' + x[0], x[1]]) : []), ...NOTES_MAP[key]].map(([n, fix]) => `<div style="padding:10px 16px;border-bottom:1px solid var(--line-2);display:grid;grid-template-columns:18px 1fr;gap:4px 10px"><span style="color:var(--green)">${ic('check', 16)}</span><b style="font:600 13.5px var(--f-head)">${esc(n)}</b><span></span><span style="font-size:13px;color:var(--ink-2)">${esc(fix)}</span></div>`).join('')}</div>
   <div class="card-f muted">Showing ${VERSIONS.find(x => x[0] === S.ver)[1]} · ${VERSIONS.find(x => x[0] === S.ver)[2]}. Switch versions in the avatar menu.</div></aside>`;
 }
 
