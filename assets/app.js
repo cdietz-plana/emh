@@ -121,6 +121,8 @@ function mkCase(i) {
 }
 const CASES = Array.from({ length: 48 }, (_, i) => mkCase(i));
 Object.assign(CASES[0], { first: 'Rachel', last: 'Johnson', mi: 'N', dob: new Date(1981, 3, 14), gender: 'Female', street: '1420 Westmoreland Avenue', city: 'Nashville, TN 37210', phone: '(629) 202-1234', lang: 'English', best: 'Weekdays after 5pm', alt: 'Anne Johnson', follow: addDays(TODAY, -15), ship: 'Pending Shipment', qty: 46, pinned: true });
+CASES.forEach((c, i) => { if (i % 5 === 3) { c.prescriber = 'Dr. Rosa Lindqvist'; c.facility = 'Hollywood Doctors'; } });
+PRESCRIBERS.push(['Dr. Rosa Lindqvist', 'Hollywood Doctors']);
 const byId = (id) => CASES.find(c => c.id === id);
 const fullName = (c) => `${c.last}, ${c.first}`;
 const email = (c) => `${c.first}.${c.last}`.toLowerCase() + '@examplemail.com';
@@ -286,7 +288,7 @@ function casesTable(list, opts = {}) {
     <td><a href="#" data-a="case" data-id="${c.id}" class="strong pname">${esc(fullName(c))}</a><span class="sub num">${c.id} · DOB ${fmt(c.dob)}</span></td>
     ${C.prescriber ? `<td>${esc(c.prescriber)}<span class="sub">${esc(c.facility)}</span></td>` : ''}
     <td>${followCell(c)}</td>
-    <td>${pill(c.caseStatus)}</td>
+    <td>${pill(c.caseStatus)}${c.sub && S.ver !== 'v1' ? `<span class="sub">${esc(c.sub)}</span>` : ''}</td>
     <td>${pill(c.coverage)}</td>
     <td>${c.ar === 'None' ? '<span class="muted">None</span>' : pill(c.ar)}</td>
     ${C.pap ? `<td>${pill(c.pap)}</td>` : ''}${C.rx ? `<td><span class="num">Qty ${c.qty}</span><span class="sub">${esc(c.ship)}</span></td>` : ''}
@@ -1663,13 +1665,15 @@ function acctMenu() {
   const open = S.menu === 'acct';
   return `<div class="acctwrap"><button class="avatarbtn" data-a="menu" data-v="acct" aria-expanded="${open}" aria-label="Account menu"><span class="avatar">JM</span></button>${open ? `<div class="menu-pop acctmenu" role="menu">
     <div class="acct-h"><span class="avatar">JM</span><div><b>Janet Mills</b><span>Case manager</span></div></div><hr>
+    <div class="acct-sub">${ic('clock', 16)} Versions</div>
+    <div class="dirlist verlist">${VERSIONS.map(([k, l, n, d], i) => `<button data-a="ver" data-v="${k}" aria-pressed="${S.ver === k}" title="${esc(d)}"><span class="dl-k">${l}</span><span class="vt">${n}${i === 0 ? ' <em>Latest</em>' : ''}</span>${S.ver === k ? ic('check', 14) : ''}</button>`).join('')}</div><hr>
     <button data-a="settings">${ic('gear', 16)} Settings</button>
     <div class="acct-sub">${ic('sidebar', 16)} Layout</div>
     <div class="dirlist">${[['H', 'A'], ['D', 'B'], ['A', 'C']].map(([k, shown]) => `<button data-a="dir" data-v="${k}" aria-pressed="${S.dir === k}" title="${esc(DIRS[k][1])}"><span class="dl-k">${shown}</span>${DIRS[k][0]}${S.dir === k ? ic('check', 14) : ''}</button>`).join('')}</div>
-    <div class="acct-sub">${ic('dash', 16)} Dashboard</div>
+${HUB_FLAGS.dashSwitch ? `    <div class="acct-sub">${ic('dash', 16)} Dashboard</div>
     <div class="dirlist">${DASHES.map(([k, l, d], i) => `<button data-a="dashset" data-v="${k}" aria-pressed="${S.dash === k}" title="${esc(d)}"><span class="dl-k">${i + 1}</span>${l}${S.dash === k ? ic('check', 14) : ''}</button>`).join('')}</div>
-    <div class="acct-sub">${ic('grid', 16)} Theme</div>
-    <div class="swatches">${HUES.map(([k, l, c]) => `<button class="swatch ${S.hue === k ? 'on' : ''}" data-a="hue" data-v="${k}" aria-pressed="${S.hue === k}" title="${l}"><i style="background:linear-gradient(135deg,${c},color-mix(in srgb,${c} 55%,#000))"></i><span>${l}</span></button>`).join('')}</div><hr>
+` : ''}${HUB_FLAGS.themes ? `    <div class="acct-sub">${ic('grid', 16)} Theme</div>
+    <div class="swatches">${HUES.map(([k, l, c]) => `<button class="swatch ${S.hue === k ? 'on' : ''}" data-a="hue" data-v="${k}" aria-pressed="${S.hue === k}" title="${l}"><i style="background:linear-gradient(135deg,${c},color-mix(in srgb,${c} 55%,#000))"></i><span>${l}</span></button>`).join('')}</div>` : ''}<hr>
     <button data-a="notes" aria-pressed="${S.notesPanel}">${ic('check', 16)} ${S.notesPanel ? 'Hide' : 'Show'} feedback addressed</button><hr>
     <button data-a="signout">${ic('arrowr', 16)} Sign out</button></div>` : ''}</div>`;
 }
@@ -2295,7 +2299,7 @@ ROUTES_X.settings = () => {
     <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" data-a="modal" data-v="pwchange">${ic('key', 16)} Change password</button><button class="btn primary" data-a="setprofile">Save profile</button></div></div>`;
   if (sec === 'notif') body = `<div class="card-h"><h2>Notifications</h2></div><div class="card-b">${tog('n_assign', 'A case is assigned to me', 'Email and in-app')}${tog('n_msg', 'A provider or pharmacy replies', 'In-app, plus email if not read in 1 hour')}${tog('n_fax', 'A fax fails to send', 'In-app')}${tog('n_expire', 'An authorization on my cases is about to expire', 'Email, 14 days ahead')}${tog('n_digest', 'Daily summary', 'Email at 7:30 AM with follow-ups due today')}</div>`;
   if (sec === 'work') body = `<div class="card-h"><h2>Work preferences</h2></div><div class="card-b setform"><div class="polgrid">${sel('landing', 'Start page after sign-in', ['Dashboard', 'Cases', 'Communications', 'Unattached Uploads'])}${sel('rows', 'Rows per page', ['25', '50', '100'])}</div></div>`;
-  if (sec === 'look') body = `<div class="card-h"><h2>Appearance</h2></div><div class="card-b setform"><div class="lbl">Color theme</div><div class="swrow">${HUES.map(([k, l, hex]) => `<button class="swbig ${S.hue === k ? 'on' : ''}" data-a="hue" data-v="${k}"><span style="background:${hex}"></span>${l}</button>`).join('')}</div><div class="lbl" style="margin-top:6px">Layout</div><div class="radio-cards">${[['H', 'A'], ['D', 'B'], ['A', 'C']].map(([k, sh]) => `<label data-a="dir" data-v="${k}"><input type="radio" name="dirset" ${S.dir === k ? 'checked' : ''}><span><b>${sh} · ${DIRS[k][0]}</b><br><span class="muted">${DIRS[k][1]}</span></span></label>`).join('')}</div><p class="muted" style="margin:0;font-size:13px">Both are also in the avatar menu at the top right. Saved on this computer.</p></div>`;
+  if (sec === 'look') body = `<div class="card-h"><h2>Appearance</h2></div><div class="card-b setform">${HUB_FLAGS.themes ? `<div class="lbl">Color theme</div><div class="swrow">${HUES.map(([k, l, hex]) => `<button class="swbig ${S.hue === k ? 'on' : ''}" data-a="hue" data-v="${k}"><span style="background:${hex}"></span>${l}</button>`).join('')}</div>` : ''}<div class="lbl" style="margin-top:6px">Layout</div><div class="radio-cards">${[['H', 'A'], ['D', 'B'], ['A', 'C']].map(([k, sh]) => `<label data-a="dir" data-v="${k}"><input type="radio" name="dirset" ${S.dir === k ? 'checked' : ''}><span><b>${sh} · ${DIRS[k][0]}</b><br><span class="muted">${DIRS[k][1]}</span></span></label>`).join('')}</div><p class="muted" style="margin:0;font-size:13px">Also in the avatar menu at the top right. Saved on this computer.</p></div>`;
   if (sec === 'ooo') body = `<div class="card-h"><h2>Out of office</h2></div><div class="card-b setform">${tog('ooo', 'I am out of office', 'New assignments go to your delegate and senders see an auto reply')}${V.ooo ? `<div class="polgrid">${sel('delegate', 'Delegate', TEAM.filter(t => t !== ME))}${inp('set-back', 'Back on', { type: 'date', v: '2026-10-05' })}</div>` : ''}</div>`;
   return `<div class="page"><div class="pagehead"><div><h1>Settings</h1><div class="muted" style="font-size:13px">Your account and how HealthPacer works for you</div></div></div>
   <div class="caselayout side-left setlayout"><nav class="card setnav" aria-label="Settings sections">${secs.map(([k, l, i]) => `<button data-a="setsec" data-v="${k}" aria-current="${sec === k}">${ic(i, 16)} ${l}</button>`).join('')}</nav><section class="card">${body}</section></div></div>`;
@@ -2455,6 +2459,546 @@ Object.assign(EXTRA, {
 });
 const _afterRender2 = afterRender;
 afterRender = function () { _afterRender2(); if (FOCUS_MOVE) focusPlay(); };
+/* ================= Round 6: client comments (Katie) ================= */
+/* ---- Versions: review rounds live side by side; latest is the default ---- */
+const VERSIONS = [
+  ['v3', 'V3', 'HCP portal', 'Adds the HCP portal (program color, blue by default), a switch between the Hub and the portal, and the eMax Design Pattern Library'],
+  ['v2', 'V2', 'Client review 1', 'Bento dashboard, green only, pinned cases, substatus, patient ID link, prescription link, new Manage prescription, filter scroll fix'],
+  ['v1', 'V1', 'Initial concepts', 'All dashboard styles and color themes as first presented']
+];
+S.ver = VERSIONS[0][0]; try { const v = localStorage.getItem('hp-ver'); if (v && VERSIONS.some(x => x[0] === v)) S.ver = v; } catch (e) { }
+const isV1 = () => S.ver === 'v1';
+const HUB_FLAGS = { get dashSwitch() { return isV1(); }, get themes() { return isV1(); } };
+const _tabRxV1 = tabRx, _caseHeaderV1 = caseHeader;
+function applyVersion() {
+  if (isV1()) {
+    let d = 'deck', h = 'green'; try { d = localStorage.getItem('hp-dash') || 'deck'; h = localStorage.getItem('hp-hue') || 'green'; } catch (e) { }
+    S.dash = DASHES.some(x => x[0] === d) ? d : 'deck'; S.hue = HUES.some(x => x[0] === h) ? h : 'green';
+  } else { S.dash = 'bento'; S.hue = 'green'; }
+  applyHue(); if (S.route === 'dashboard') dashDocks();
+}
+applyVersion();
+Object.assign(EXTRA, {
+  ver(t) { S.ver = t.dataset.v; try { localStorage.setItem('hp-ver', S.ver); } catch (e) { } applyVersion(); S.menu = 'acct'; toast(`Showing ${VERSIONS.find(x => x[0] === S.ver)[1]} · ${VERSIONS.find(x => x[0] === S.ver)[2]}`); }
+});
+
+/* ---- Team workload tile becomes Pinned cases ---- */
+const _dashBento0 = dashBento;
+dashBento = function () {
+  if (isV1()) return _dashBento0();
+  const pinned = CASES.filter(c => c.pinned);
+  const tileHtml = `<section class="btile b-team"><div class="bt-h"><span>Pinned cases</span><a href="#" data-a="drill" data-k="quick" data-v="Pinned">All pinned</a></div>${pinned.slice(0, 5).map(c => `<button class="bexp" data-a="case" data-id="${c.id}"><span><b>${esc(fullName(c))}</b><span class="muted">${esc(c.caseStatus)}${c.sub ? ' · ' + esc(c.sub) : ''}</span></span><span class="num ${c.follow && dayDiff(c.follow) < 0 ? 'overdue' : 'muted'}">${c.follow ? (dayDiff(c.follow) < 0 ? `${-dayDiff(c.follow)}d late` : dayDiff(c.follow) === 0 ? 'Today' : fmt(c.follow)) : 'No date'}</span></button>`).join('') || '<div class="muted" style="font-size:13px">Pin a case with the star to keep it here.</div>'}</section>`;
+  return _dashBento0().replace(/<section class="btile b-team"[\s\S]*?<\/section>/, tileHtml);
+};
+
+/* ---- Substatus: the reason shown under the case status ---- */
+CASES.forEach((c, i) => { const rs = STATUS_REASONS(c.caseStatus).filter(r => r !== 'Other'); c.sub = rs[(i * 7) % rs.length]; });
+if (EXTRA.st2save) { const _st2 = EXTRA.st2save; EXTRA.st2save = function (t, e) { const r = (document.getElementById('streason') || {}).value; _st2(t, e); if (r && !S.modal) byId(S.caseId).sub = r; }; }
+if (EXTRA.closecase2save) { const _cc2 = EXTRA.closecase2save; EXTRA.closecase2save = function (t, e) { const r = val('cc2r'); _cc2(t, e); if (r && !S.modal) byId(S.caseId).sub = r; }; }
+
+/* ---- Prescriptions: versions, document link, manage like intake ---- */
+const RXS = {};
+function rxOf(c) {
+  if (!RXS[c.id]) RXS[c.id] = {
+    cur: { med: 'EMX-300 300 mg tablet', written: '7/28/2026', dosing: 'opt1', directions: DOSING[0].d, qty: String(c.qty), days: '14', refillQty: '60', refills: '5', dispense: 'Dispense as written', file: 'Rx_EMX300_07282026.pdf', received: '7/29/2026', triage: 'Approved', status: 'Active' },
+    hist: [{ received: '6/2/2026', med: 'EMX-300 150 mg tablet', qty: '30', by: c.prescriber, triage: 'Closed', file: 'Rx_EMX150_06012026.pdf', note: 'Replaced' }]
+  };
+  return RXS[c.id];
+}
+const rxLink = (c, label) => { const r = rxOf(c).cur; return `<a href="#" data-a="docopen" data-v="${esc(r.file)}" data-type="Prescription" data-date="${esc(r.written)}" data-pages="2">${label || esc(r.file)}</a>`; };
+tabRx = function (c) {
+  if (isV1()) return _tabRxV1(c);
+  const R = rxOf(c), r = R.cur, act = r.status === 'Active';
+  const rows = [{ received: r.received, med: r.med, qty: r.qty, by: c.prescriber, triage: r.triage, file: r.file, cur: true }, ...R.hist];
+  return `${tph('Prescription', `<button class="btn" data-a="modal" data-v="triage">${ic('flag', 16)} Triage prescription</button><button class="btn primary" data-a="modal" data-v="rxmanage">${ic('edit', 16)} Manage prescription</button>`)}
+  <div class="blocks"><div class="block full" data-sec="Active prescription"><div class="section-t">${ic('pill', 15)}${act ? 'Active' : 'Current'} prescription <span class="pill ${act ? 't-ok' : 't-danger'}" style="letter-spacing:0;text-transform:none">${r.status}</span><span class="sp"></span><span class="rxdoc">${ic('file', 14)} ${rxLink(c, 'View signed prescription')}</span></div>
+  <div class="fields">${fld('Medication', r.med)}${fld('Written', r.written)}${fld('Prescriber', c.prescriber, false)}${fld('Initial quantity', `${r.qty} · ${r.days} day supply`, false)}${fld('Refill quantity', r.refillQty ? `${r.refillQty} · 30 day supply` : 'None', false)}${fld('Refills', r.refills, false)}${fld('Substitution', r.dispense, false)}${fld('Pharmacy', c.pharmacy, false)}<div class="fld"><span class="lbl">Shipment</span><span class="val">${pill(c.ship)}</span></div></div>
+  <div class="fld"><span class="lbl">Directions</span><span class="val" style="max-width:80ch">${esc(r.directions)}</span></div>${r.status === 'Discontinued' ? `<div class="note-banner" style="background:var(--danger-50);color:var(--danger)">${ic('info', 16)}<span>Discontinued ${esc(r.stopped || '')}: ${esc(r.reason || '')}</span></div>` : ''}</div></div>
+  <div class="tablewrap"><table class="dt"><thead><tr><th>Received</th><th>Medication</th><th>Qty</th><th>Written by</th><th>Triage</th><th>Document</th></tr></thead><tbody>
+  ${rows.map(x => `<tr class="${x.cur && S.flash === 'rx' ? 'flash' : ''}"><td class="num">${esc(x.received)}${x.cur ? ' <span class="pill nodot t-ok" style="height:18px">Current</span>' : ''}</td><td>${esc(x.med)}</td><td class="num">${esc(x.qty)}</td><td>${esc(x.by)}</td><td>${pill(x.triage)}</td><td>${docLink(x.file, { type: 'Prescription', date: x.received })}</td></tr>`).join('')}</tbody></table></div>`;
+};
+
+/* Manage prescription: same options as intake, entered as a new prescription (no editing single fields) */
+const _xm4 = extraModal;
+extraModal = function (m, wrap) {
+  if (m.type !== 'rxmanage') return _xm4(m, wrap);
+  const c = byId(S.caseId), R = rxOf(c), d = S.rxd || (S.rxd = { mode: 'new', dosing: '', refills: '', written: '', dispense: '', file: '', cinstr: '', cqty: '', cdays: '' });
+  const e = m.err || {}; const st = m.step || 0;
+  const steps = d.mode === 'stop' ? ['Action', 'Discontinue'] : ['Action', 'Dosing', 'Prescription details'];
+  const head = `<ol class="mstepper">${steps.map((s, i) => `<li class="${i < st ? 'done' : i === st ? 'on' : ''}"><span>${i < st ? ic('check', 12) : i + 1}</span>${s}</li>`).join('')}</ol>`;
+  let body = '';
+  if (st === 0) body = `<p class="muted" style="margin:0;font-size:13px">A prescription is never edited in place. A change is entered as a new prescription, and the current one moves to history.</p>
+    <div class="radio-cards">${[['new', 'New prescription', 'Enter the new prescription the same way as intake: dosing, then refills, written date, dispensing and the signed form.'], ['stop', 'Discontinue', 'Stop the current prescription and record why.']].map(([k, l, s]) => `<label data-a="rxmode" data-v="${k}"><input type="radio" name="rxmode" ${d.mode === k ? 'checked' : ''}><span><b>${l}</b><br><span class="muted">${s}</span></span></label>`).join('')}</div>
+    <div class="fields">${fld('Current', `${R.cur.med} · written ${R.cur.written}`, false)}</div>`;
+  if (st === 1 && d.mode === 'new') body = `<div class="ikproduct"><b>EMX-300 300 mg tablets</b><span class="muted">Initial dosage 300 mg once daily. May increase in 300 mg steps to 1200 mg daily based on response.</span></div>
+    <div class="ikopts ${e.dosing ? 'err' : ''}">${DOSING.map(o => `<label class="ikopt ${d.dosing === o.id ? 'on' : ''}" data-a="rxdose" data-v="${o.id}"><input type="radio" name="rxdosing" ${d.dosing === o.id ? 'checked' : ''}><span><b>${o.t}</b><br><span class="muted">${o.d}</span>${o.q ? `<br><span class="qty num">${o.q}</span>` : ''}</span></label>`).join('')}</div>${e.dosing ? errField('Choose a dosing schedule') : ''}
+    ${d.dosing === 'custom' ? `${inp('rxcinstr', 'Dosing instructions', { area: 1, h: 70, req: 1, v: d.cinstr, err: e.cinstr })}<div class="polgrid">${inp('rxcqty', 'Quantity', { req: 1, v: d.cqty, err: e.cqty })}${inp('rxcdays', 'Days supply', { req: 1, v: d.cdays, err: e.cdays })}</div>` : ''}`;
+  if (st === 2 && d.mode === 'new') body = `<div class="polgrid">${inp('rxrefills', 'Number of refills', { req: 1, v: d.refills, err: e.refills, phText: '0 to 11' })}${inp('rxwritten', 'Rx written date', { req: 1, type: 'date', v: d.written, err: e.written })}${inp('rxdispense', 'Dispensing', { req: 1, opts: ['Dispense as written', 'Substitution allowed'], v: d.dispense, err: e.dispense })}</div>
+    <div class="input ${e.file ? 'err' : ''}"><span class="lbl">Signed prescription <span class="req">*</span></span><div class="ikpanel">${d.file ? `${ic('file', 16)} <b>${esc(d.file)}</b> <span class="muted">184 KB</span><button class="link-btn" data-a="rxfile" data-v="">Remove</button>` : `<span>Upload the signed and dated prescription. PDF or image, up to 2 MB.</span><button class="btn sm" data-a="rxfile" data-v="Rx_signed_${fmt(TODAY).replace(/\//g, '')}.pdf">${ic('upload', 14)} Choose file</button>`}</div>${e.file ? errField('Signed prescription is required') : ''}</div>
+    <div class="note-banner">${ic('info', 16)}<span>Saving sends the new prescription to triage. The current prescription moves to history.</span></div>`;
+  if (st === 1 && d.mode === 'stop') body = `${inp('rxstopr', 'Reason', { req: 1, err: e.reason, opts: ['Prescriber stopped therapy', 'Adverse event', 'Patient declined therapy', 'Replaced by a new prescription', 'Other'], v: d.reason })}${inp('rxstopn', 'Note', { area: 1, h: 70, opt: 1, v: d.note })}`;
+  const last = st === steps.length - 1;
+  return wide(wrap('Manage prescription', head + body, `${st ? `<button class="btn" data-a="rxstep" data-v="-1" style="margin-right:auto">${ic('chevl', 16)} Back</button>` : ''}<button class="btn" data-a="mclose">Cancel</button>${last ? `<button class="btn ${d.mode === 'stop' ? 'danger' : 'primary'}" data-a="rxsave">${d.mode === 'stop' ? 'Discontinue prescription' : `${ic('check', 16)} Save new prescription`}</button>` : `<button class="btn primary" data-a="rxstep" data-v="1">Continue ${ic('chevr', 16)}</button>`}`));
+};
+function rxGrab() { const d = S.rxd; [['cinstr', 'rxcinstr'], ['cqty', 'rxcqty'], ['cdays', 'rxcdays'], ['refills', 'rxrefills'], ['written', 'rxwritten'], ['dispense', 'rxdispense'], ['reason', 'rxstopr'], ['note', 'rxstopn']].forEach(([k, id]) => { if (document.getElementById(id)) d[k] = val(id); }); }
+function rxCheck(st) {
+  const d = S.rxd, err = {};
+  if (d.mode === 'new' && st === 1) { if (!d.dosing) err.dosing = 1; if (d.dosing === 'custom') { if (!d.cinstr) err.cinstr = 'Enter the instructions'; if (!d.cqty) err.cqty = 'Required'; if (!d.cdays) err.cdays = 'Required'; } }
+  if (d.mode === 'new' && st === 2) { if (!d.refills) err.refills = 'Required'; if (!d.written) err.written = 'Required'; if (!d.dispense) err.dispense = 'Required'; if (!d.file) err.file = 1; }
+  if (d.mode === 'stop' && st === 1 && !d.reason) err.reason = 'Choose a reason';
+  return Object.keys(err).length ? err : null;
+}
+Object.assign(EXTRA, {
+  rxmode(t) { S.rxd.mode = t.dataset.v; },
+  rxdose(t) { rxGrab(); S.rxd.dosing = t.dataset.v; if (S.modal.err) delete S.modal.err.dosing; },
+  rxfile(t) { rxGrab(); S.rxd.file = t.dataset.v; if (S.modal.err) delete S.modal.err.file; },
+  rxstep(t) { rxGrab(); const st = S.modal.step || 0, dir = +t.dataset.v; if (dir > 0) { const err = rxCheck(st); if (err) { S.modal.err = err; return; } } S.modal = { type: 'rxmanage', step: Math.max(0, st + dir) }; },
+  rxsave() {
+    rxGrab(); const st = S.modal.step || 0, err = rxCheck(st); if (err) { S.modal.err = err; return; }
+    const c = byId(S.caseId), R = rxOf(c), d = S.rxd;
+    if (d.mode === 'stop') { Object.assign(R.cur, { status: 'Discontinued', stopped: fmt(TODAY), reason: d.reason }); auditLog('Prescription', 'Prescription discontinued', d.reason); toast('Prescription discontinued'); }
+    else {
+      const o = DOSING.find(x => x.id === d.dosing); const q = d.dosing === 'custom' ? d.cqty : (o.q.match(/\d+/) || ['30'])[0];
+      R.hist.unshift({ received: R.cur.received, med: R.cur.med, qty: R.cur.qty, by: c.prescriber, triage: R.cur.triage, file: R.cur.file, note: 'Replaced' });
+      R.cur = { med: 'EMX-300 300 mg tablet', written: usOf(d.written), dosing: d.dosing, directions: d.dosing === 'custom' ? d.cinstr : o.d, qty: q, days: d.dosing === 'custom' ? d.cdays : (o.id === 'opt1' ? '14' : '30'), refillQty: d.dosing === 'opt3' ? '' : '60', refills: d.refills, dispense: d.dispense, file: d.file, received: fmt(TODAY), triage: 'Pending', status: 'Active' };
+      DOCS.unshift([d.file, 'Prescription', fmt(TODAY), ME, '184 KB', false, true]);
+      auditLog('Prescription', 'New prescription entered', `${R.cur.directions.slice(0, 60)}. Sent to triage`); flash('rx'); toast('New prescription saved and sent to triage');
+    }
+    S.modal = null; S.rxd = null;
+  }
+});
+const _em1 = EXTRA.modal;
+document.addEventListener('click', (e) => { const t = e.target.closest('[data-a="modal"][data-v="rxmanage"]'); if (t) S.rxd = null; }, true);
+
+/* ---- Case header: Patient ID opens the patient record, Rx link, substatus ---- */
+const _caseHeader0 = caseHeader;
+caseHeader = function (c) {
+  let h = _caseHeader0(c);
+  if (isV1()) return h;
+  h = h.replace(`<span>Patient <span class="mono" style="color:var(--ink)">${c.pid}</span>`, `<span>Patient <a href="#" class="mono idlink" data-a="patient" data-id="${c.pid}" title="Open patient record">${c.pid}</a>`);
+  h = h.replace(`<span class="num">DOB ${fmt(c.dob)}</span>`, `<span class="num">DOB ${fmt(c.dob)}</span><span class="rxid">${ic('file', 13)} ${rxLink(c, 'Active prescription')}</span>`);
+  h = h.replace(/(<button class="selpill [^"]*" data-a="menu" data-v="status">[\s\S]*?<\/button>)/, `$1${c.sub ? `<span class="substat" title="${esc(c.sub)}">${esc(c.sub)}</span>` : ''}`);
+  return h;
+};
+/* ================= V3: HCP portal + app switch ================= */
+const isV3 = () => S.ver === 'v3';
+S.app = 'hub'; try { if (localStorage.getItem('hp-app') === 'hcp') S.app = 'hcp'; } catch (e) { }
+if (!isV3()) S.app = 'hub';
+const isHCP = () => S.app === 'hcp';
+{ const L = CASES.filter(c => c.facility === 'Hollywood Doctors'); const cl = L.filter(c => ['Closed', 'Complete'].includes(c.caseStatus)); if (cl[0]) { cl[0].caseStatus = 'Requested'; cl[0].ar = 'None'; cl[0].coverage = 'Pending'; } if (cl[1]) { cl[1].caseStatus = 'Intake'; cl[1].ar = 'None'; cl[1].coverage = 'Pending'; } }
+const HCP_FAC = FACILITIES.find(f => f.name === 'Hollywood Doctors') || FACILITIES[0];
+const HCP_USER = { name: 'Tina Alvarez', honor: 'Ms.', first: 'Tina', last: 'Alvarez', role: 'Facility administrator', email: 'tina.alvarez@hollywooddoctors.example', mobile: '(310) 555-0144', phone: '(310) 709-4563', fax: '(310) 709-4555' };
+const hcpCases = () => CASES.filter(c => c.facility === HCP_FAC.name);
+const locOf = (c) => HCP_FAC.locs[(parseInt(c.id.slice(1)) % HCP_FAC.locs.length)] || HCP_FAC.locs[0];
+const HMAP = { dashboard: 'h-dash', cases: 'h-search', patients: 'h-search', comms: 'h-notif', uploads: 'h-uploads', expauth: 'h-exp', expben: 'h-exp', expcon: 'h-exp', facility: 'h-facility', facilities: 'h-facility', settings: 'h-profile' };
+const HROUTES = ['h-dash', 'h-search', 'h-notif', 'h-exp', 'h-uploads', 'h-facility', 'h-profile', 'h-case', 'h-patient', 'patterns'];
+const HPARENT = { 'h-case': 'h-search', 'h-patient': 'h-search' };
+let HUB_HUE_KEEP = null;
+function applyApp() {
+  if (isHCP()) { let h = 'blue'; try { h = localStorage.getItem('hp-hcphue') || 'blue'; } catch (e) { } S.hue = HUES.some(x => x[0] === h) ? h : 'blue'; hcpSteps(true); }
+  else { hcpSteps(false); applyVersion(); }
+  applyHue(); document.body.classList.toggle('app-hcp', isHCP());
+}
+/* Intake: the portal has no internal care team step */
+let IK_TEAM = null;
+function hcpSteps(on) {
+  const i = IK_STEPS.findIndex(s => s.id === 'team');
+  if (on && i >= 0) { IK_TEAM = IK_STEPS.splice(i, 1)[0]; }
+  if (!on && i < 0 && IK_TEAM) { const j = IK_STEPS.findIndex(s => s.id === 'prescriber'); IK_STEPS.splice(j + 1, 0, IK_TEAM); }
+}
+
+/* ---- Routing ---- */
+const _goH = go;
+go = function (r) {
+  if (isHCP()) { if (r === 'cases' && S.q) { S.pq['h-search'] = S.q; S.q = ''; } r = HMAP[r] || r; }
+  if (HROUTES.includes(r)) { S.route = r; S.drawer = null; S.pop = null; S.mega = null; S.navOpen = false; S.menu = null; window.scrollTo(0, 0); render(); return; }
+  return _goH(r);
+};
+function hOpenCase(id) { S.caseId = id; S.htab = 'info'; S.drawer = null; go('h-case'); }
+document.addEventListener('click', (e) => {
+  if (!isHCP()) return; const t = e.target.closest('[data-a]'); if (!t) return;
+  const a = t.dataset.a;
+  if (a === 'case' || a === 'hcase') { e.preventDefault(); e.stopPropagation(); S.pop = null; S.modal = null; hOpenCase(t.dataset.id); }
+  else if (a === 'patient') { e.preventDefault(); e.stopPropagation(); S.detail.hpatient = t.dataset.id; go('h-patient'); }
+  else if (a === 'newcase') { e.preventDefault(); e.stopPropagation(); EXTRA.newcase(); render(); }
+}, true);
+
+/* ---- Shells ---- */
+const HNAV = () => [['h-dash', 'Dashboard', 'dash'], ['h-new', 'New Patient/Case', 'userplus'], ['h-notif', 'Notifications', 'bell', HMSGS.filter(m => m.unread).length], ['h-search', 'Search Patients', 'search'], ['h-exp', 'Upcoming Expirations', 'clock', hExpiring().length], ['h-uploads', 'Secure Uploads', 'upload'], ['h-facility', 'Manage Facility Account', 'building']];
+const hOn = (k) => S.route === k || HPARENT[S.route] === k || (k === 'h-new' && ['intake', 'created'].includes(S.route));
+const hNavBtn = ([k, l, i, n]) => `<button class="navitem ${hOn(k) ? 'on' : ''}" ${k === 'h-new' ? 'data-a="hnew"' : `data-a="go" data-r="${k}"`} title="${l}">${ic(i, 18)}<span>${l}</span>${n ? `<span class="count num">${n}</span>` : ''}</button>`;
+const hBrand = () => `${logo(true)}<span class="portaltag">Provider portal</span>`;
+const _shellA0 = shellA, _shellB0 = shellB, _util0h = util, _acct0 = acctMenu;
+shellA = function (content) {
+  if (!isHCP()) return _shellA0(content);
+  const mini = S.navMini;
+  return `<div class="app"><aside class="sidenav ${mini ? 'mini' : ''} ${S.navOpen ? 'open' : ''}" aria-label="Main navigation">
+    <div class="brand">${logo(true)}<button class="iconbtn" data-a="navmini" aria-label="Collapse navigation">${ic('sidebar', 18)}</button></div>
+    <div class="portalline">Provider portal · ${esc(HCP_FAC.name)}</div>
+    <nav>${HNAV().map(hNavBtn).join('')}</nav>
+    <div class="me"><span class="avatar">TA</span><span>${esc(HCP_USER.name)}<br><span class="muted" style="font-size:12px">${esc(HCP_USER.role)}</span></span></div>
+    <div class="supportline">${ic('phone', 13)} Support 1-555-867-5309</div></aside>
+    <div class="main"><header class="topbar"><button class="iconbtn mobile-only" data-a="navopen" aria-label="Open navigation">${ic('menu', 20)}</button>${mini ? `<button class="iconbtn" data-a="navmini" aria-label="Expand navigation">${ic('sidebar', 18)}</button>` : ''}<span class="grow"></span>${util()}</header>${content}</div></div>`;
+};
+shellB = function (content) {
+  if (!isHCP()) return _shellB0(content);
+  const items = HNAV().filter(x => x[0] !== 'h-new');
+  return `<header class="topnav"><div class="row">${hBrand()}<button class="iconbtn mobile-only" data-a="menuopen" aria-label="Open menu">${ic('menu', 20)}</button>
+    <nav class="menu ${S.navOpen ? 'open' : ''}" aria-label="Main">${items.map(([k, l, i, n]) => `<button data-a="go" data-r="${k}" class="${hOn(k) ? 'on' : ''}">${{ 'h-search': 'Patients', 'h-exp': 'Expirations', 'h-facility': 'Facility', 'h-uploads': 'Uploads', 'h-notif': 'Messages' }[k] || l}${n ? ` <span class="count num">${n}</span>` : ''}</button>`).join('')}</nav>
+    <span style="flex:1"></span><button class="btn primary hnewbtn" data-a="hnew" title="New patient / case">${ic('plus', 16)} New case</button>${util()}</div></header>${content}`;
+};
+util = function () {
+  if (!isHCP()) return _util0h();
+  const n = HMSGS.filter(m => m.unread).length;
+  return `<div class="util"><label class="search">${ic('search', 16)}<span class="sr">Search</span><input placeholder="Search patients or cases" data-a="gosearch"><kbd>/</kbd></label><div class="notifwrap"><button class="iconbtn" aria-label="Notifications${n ? `, ${n} unread` : ''}" data-a="go" data-r="h-notif">${ic('bell', 20)}${n ? '<span class="dot"></span>' : ''}</button></div>${acctMenu()}</div>`;
+};
+acctMenu = function () {
+  if (!isHCP()) {
+    let h = _acct0();
+    if (isV3() && S.menu === 'acct') h = h.replace(`<button data-a="settings">`, `<button data-a="appswitch" class="appsw">${ic('arrowr', 16)} Switch to HCP Portal <span class="soon">Provider view</span></button><button data-a="go" data-r="patterns">${ic('grid', 16)} eMax Design Pattern Library</button><hr><button data-a="settings">`);
+    return h;
+  }
+  const open = S.menu === 'acct';
+  return `<div class="acctwrap"><button class="avatarbtn" data-a="menu" data-v="acct" aria-expanded="${open}" aria-label="Account menu"><span class="avatar">TA</span></button>${open ? `<div class="menu-pop acctmenu" role="menu">
+    <div class="acct-h"><span class="avatar">TA</span><div><b>${esc(HCP_USER.name)}</b><span>${esc(HCP_USER.role)} · ${esc(HCP_FAC.name)}</span></div></div><hr>
+    <div class="acct-sub">${ic('clock', 16)} Versions</div>
+    <div class="dirlist verlist">${VERSIONS.map(([k, l, n, d], i) => `<button data-a="ver" data-v="${k}" aria-pressed="${S.ver === k}" title="${esc(d)}"><span class="dl-k">${l}</span><span class="vt">${n}${i === 0 ? ' <em>Latest</em>' : ''}</span>${S.ver === k ? ic('check', 14) : ''}</button>`).join('')}</div><hr>
+    <button data-a="appswitch" class="appsw">${ic('arrowr', 16)} Switch to HealthPacer Hub <span class="soon">Staff view</span></button>
+    <button data-a="go" data-r="patterns">${ic('grid', 16)} eMax Design Pattern Library</button><hr>
+    <button data-a="go" data-r="h-profile">${ic('users', 16)} My profile</button>
+    <div class="acct-sub">${ic('sidebar', 16)} Layout</div>
+    <div class="dirlist">${[['H', 'A'], ['D', 'B'], ['A', 'C']].map(([k, shown]) => `<button data-a="dir" data-v="${k}" aria-pressed="${S.dir === k}"><span class="dl-k">${shown}</span>${DIRS[k][0]}${S.dir === k ? ic('check', 14) : ''}</button>`).join('')}</div>
+    <div class="acct-sub">${ic('grid', 16)} Program color</div>
+    <div class="swatches">${HUES.map(([k, l, c]) => `<button class="swatch ${S.hue === k ? 'on' : ''}" data-a="hhue" data-v="${k}" aria-pressed="${S.hue === k}" title="${l}"><i style="background:linear-gradient(135deg,${c},color-mix(in srgb,${c} 55%,#000))"></i><span>${l}</span></button>`).join('')}</div><hr>
+    <button data-a="notes" aria-pressed="${S.notesPanel}">${ic('check', 16)} ${S.notesPanel ? 'Hide' : 'Show'} feedback addressed</button><hr>
+    <button data-a="signout">${ic('arrowr', 16)} Sign out</button></div>` : ''}</div>`;
+};
+
+/* ---- Sample data for the portal ---- */
+const R16 = rng(1616); const pk16 = (a) => a[Math.floor(R16() * a.length)];
+const HUB_PEOPLE = [['Janet Mills', 'Patient Access Coordinator'], ['Sarah Mitchell', 'Patient Access Coordinator'], ['Brandon Fields', 'Field Reimbursement Manager'], ['Alicia Moreno', 'Patient Advocate']];
+const HMSG_SUBJ = [['Prior Authorization', 'Please sign and return the PA form so we can fax it to the payer today.', 'Action needed'], ['Appeal', 'The payer denied the PA for missing labs. Please send the last two cortisol results for the appeal.', 'Action needed'], ['Benefits verified', 'Benefits are verified. The patient has a 20% specialty copay after deductible.', 'FYI'], ['Consent', 'The patient has not signed consent yet. Could your office remind them at their next visit?', 'Action needed'], ['Shipment', 'The specialty pharmacy shipped the first fill. Tracking is on the case.', 'FYI'], ['Prescription', 'The prescription is missing the written date. Please send a corrected copy.', 'Action needed'], ['Coverage approved', 'Coverage is approved through the end of the plan year.', 'FYI']];
+const HMSGS = hcpCases().flatMap((c, i) => (i % 3 === 2 ? [0, 1] : [0]).map(k => { const s = HMSG_SUBJ[(i + k * 3) % HMSG_SUBJ.length]; const who = HUB_PEOPLE[(i + k) % HUB_PEOPLE.length]; const sent = daysAgo((i * 2 + k * 5) % 24, 8 + (i % 8), (i * 17) % 60); return { id: 'HM' + i + k, c, subj: s[0], body: s[1], type: s[2], from: who[0], role: who[1], sent, by: s[2] === 'Action needed' ? addDays(sent, 3) : null, unread: (i + k) % 3 === 0, answered: false, replies: [] }; })).sort((a, b) => b.sent - a.sent);
+const HUP_TYPES = ['Intake', 'Prescription', 'Insurance card', 'Lab results', 'Clinical notes', 'Outcome'];
+const HUPS = hcpCases().slice(0, 12).map((c, i) => { const t = HUP_TYPES[i % HUP_TYPES.length]; const d = daysAgo((i * 3) % 30, 9 + i % 7, (i * 13) % 60); return { id: 'HU' + i, c, type: t, file: `${t.replace(/\s+/g, '_')}_${c.last}_${fmt(d).replace(/\//g, '')}.pdf`, size: `${120 + (i * 97) % 900} KB`, desc: pk16(['Signed enrollment form for new case', 'Front and back of insurance card', 'Latest cortisol labs for appeal', 'Updated prescription with written date', 'Office visit notes for medical necessity', 'Signed PA form']), by: pk16([HCP_USER.name, 'Dr. Kasa Mahale', 'Dr. Rosa Lindqvist', 'Marcus Webb, RN']), date: d, archived: i === 9 }; });
+let HEXP_CACHE = null;
+const hExpiring = () => { if (HEXP_CACHE) return HEXP_CACHE; const base = EXPIRING.filter(e => e.c.facility === HCP_FAC.name && dayDiff(e.exp) <= 45); const extra = hcpCases().filter((c, i) => i % 4 === 1).slice(0, 3).map((c, i) => ({ c, exp: addDays(TODAY, [9, 22, 38][i]), kind: i % 2 ? 'Authorization' : 'Benefits' })); const seen = new Set(); HEXP_CACHE = base.concat(extra).filter(e => { const k = e.c.id + e.kind; if (seen.has(k)) return false; seen.add(k); return true; }); return HEXP_CACHE; };
+let HCONS_CACHE = null;
+const hConsents = () => { if (HCONS_CACHE) return HCONS_CACHE; const seen = new Set(); HCONS_CACHE = CONSENTS.filter(e => e.c.facility === HCP_FAC.name).concat(hcpCases().slice(2, 5).map((c, i) => ({ c, exp: addDays(TODAY, [6, 19, 41][i]), via: ['E-signature', 'Paper form', 'Verbal, recorded'][i], sent: null }))).filter(e => !seen.has(e.c.id) && seen.add(e.c.id)); return HCONS_CACHE; };
+const HNOTIF_DONE = {};
+
+/* ---- Dashboard (bento, same pattern as the Hub) ---- */
+ROUTES_X['h-dash'] = () => {
+  const L = hcpCases(); const cnt = (f) => L.filter(f).length;
+  const intake = L.filter(c => ['Intake', 'Requested'].includes(c.caseStatus)), pending = L.filter(c => c.caseStatus.startsWith('Pending')), active = L.filter(c => ['BI', 'Active'].includes(c.caseStatus)), cov = L.filter(c => ['Covered', 'Approved'].includes(c.coverage));
+  const act = HMSGS.filter(m => m.type === 'Action needed' && !m.answered);
+  const row = (c, extra) => `<button class="bexp" data-a="hcase" data-id="${c.id}"><span><b>${esc(fullName(c))}</b><span class="muted num">${c.id} · DOB ${fmt(c.dob)} · ${esc(c.prescriber)}</span></span>${extra}</button>`;
+  const kpi = (cls, label, sub, n, filt) => `<section class="btile click ${cls}" data-a="hdrill" data-v="${filt}"><div class="bt-h"><span>${label}</span>${ic('arrowr', 16)}</div><div class="bt-big num">${n}</div><div class="muted">${sub}</div></section>`;
+  return `<div class="page bentopage"><div class="bento hbento">
+    <section class="btile b-hero"><div class="bh-date">${esc(HCP_FAC.name)} · Provider portal</div><h1>${greet()}, ${esc(HCP_USER.first)}</h1><p>${act.length ? `<b>${act.length} messages need a response</b> from your office` : 'No messages need a response'}, and <b>${hExpiring().length + hConsents().length} items expire</b> in the next 45 days.</p><div class="bh-acts"><button class="btn" data-a="hnew">${ic('plus', 16)} New patient / case</button><button class="btn light" data-a="modal" data-v="hupnew">${ic('upload', 16)} Upload a document</button></div></section>
+    ${kpi('hk1', 'Intake', 'Cases in intake', intake.length, 'intake')}${kpi('hk2', 'Pending', 'Awaiting action', pending.length, 'pending')}
+    ${kpi('hk3', 'Requested & active', 'In progress', active.length, 'active')}${kpi('hk4', 'Coverage identified', 'Coverage confirmed', cov.length, 'coverage')}
+    <section class="btile hb-list"><div class="bt-h"><span>Messages that need your response</span><a href="#" data-a="go" data-r="h-notif">All messages</a></div>${act.slice(0, 4).map(m => `<button class="bin" data-a="drawer" data-v="hmsg" data-id="${m.id}"><b>${esc(m.subj)} · ${esc(fullName(m.c))}</b><span>${esc(m.body)}</span><span class="num ${m.by && dayDiff(m.by) < 0 ? 'overdue' : 'muted'}" style="font-size:12px">Respond by ${fmt(m.by)} · from ${esc(m.role)}</span></button>`).join('') || '<div class="muted">You are all caught up.</div>'}</section>
+    <section class="btile hb-list2"><div class="bt-h"><span>Cases in intake</span><a href="#" data-a="hdrill" data-v="intake">View all</a></div>${intake.slice(0, 4).map(c => row(c, pill(c.caseStatus))).join('') || '<div class="muted">No recent cases in intake.</div>'}</section>
+    <section class="btile hb-list3"><div class="bt-h"><span>Cases pending</span><a href="#" data-a="hdrill" data-v="pending">View all</a></div>${pending.slice(0, 4).map(c => row(c, `<span class="muted" style="font-size:12px;text-align:right">${esc(c.caseStatus)}<br>${esc(c.sub || '')}</span>`)).join('') || '<div class="muted">No recent cases pending.</div>'}</section>
+    <section class="btile hb-list4"><div class="bt-h"><span>Recent coverage updates</span><a href="#" data-a="hdrill" data-v="coverage">View all</a></div>${L.filter(c => c.coverage !== 'Pending').slice(0, 4).map(c => row(c, pill(c.coverage))).join('')}</section>
+    <section class="btile hb-exp click" data-a="go" data-r="h-exp"><div class="bt-h"><span>Expiring in 45 days</span>${ic('clock', 16)}</div><div class="bauth">${[['Authorizations', hExpiring().filter(e => e.kind === 'Authorization').length], ['Benefits', hExpiring().filter(e => e.kind !== 'Authorization').length], ['Consents', hConsents().length]].map(([l, n]) => `<button data-a="hexptab" data-v="${l.toLowerCase()}"><span class="num">${n}</span>${l}</button>`).join('')}</div></section>
+  </div></div>`;
+};
+
+/* ---- Search Patients ---- */
+const HS_F = [{ key: 'presc', label: 'Prescriber', get: c => c.prescriber }, { key: 'loc', label: 'Prescribing location', get: c => locOf(c).name }, { key: 'st', label: 'Case status', get: c => c.caseStatus }, { key: 'bi', label: 'Authorization status', get: c => c.ar }, { key: 'cov', label: 'Coverage outcome', get: c => c.coverage }, { key: 'pap', label: 'PAP status', get: c => c.pap }, { key: 'ship', label: 'Dispense status', get: c => c.ship }];
+ROUTES_X['h-search'] = () => listPage('h-search', {
+  title: 'Search Patients', sub: `Patients and cases for ${HCP_FAC.name}`, noun: 'cases', filters: HS_F, rows: hcpCases(), searchPh: 'Search by case ID, patient name, address, phone, date of birth',
+  head: `<button class="btn primary" data-a="hnew">${ic('plus', 16)} New patient / case</button>`,
+  text: c => [c.id, c.pid, fullName(c), c.first, fmt(c.dob), c.phone, c.street, c.city].join(' '),
+  cols: [
+    ['Case', '140px', c => `<a href="#" data-a="hcase" data-id="${c.id}" class="strong">${c.id}</a><span class="sub num">${c.pid} · ${fmt(c.start)}</span>`],
+    ['Patient', 'auto', c => `<a href="#" data-a="patient" data-id="${c.pid}" class="strong pname">${esc(fullName(c))}</a><span class="sub num">DOB ${fmt(c.dob)} · ${c.gender}</span>`],
+    ['Prescriber', '190px', c => `${esc(c.prescriber)}<span class="sub">${esc(locOf(c).name)}</span>`],
+    ['Case status', '220px', c => `${pill(c.caseStatus)}${c.sub ? `<span class="sub">${esc(c.sub)}</span>` : ''}`],
+    ['Coverage', '140px', c => pill(c.coverage)],
+    ['Dispense', '140px', c => pill(c.ship)]
+  ], opts: { rowAct: c => `data-a="hcase" data-id="${c.id}"`, empty: 'No cases found. Try adjusting your filters or search terms.' }
+});
+
+/* ---- Notifications ---- */
+const HN_F = [{ key: 'type', label: 'Type', get: m => m.type, opts: ['Action needed', 'FYI'] }, { key: 'when', label: 'Received', get: m => bucket(m.sent), opts: DATE_OPTS }, { key: 'presc', label: 'Prescriber', get: m => m.c.prescriber }, { key: 'st', label: 'Status', get: m => m.answered ? 'Answered' : m.unread ? 'Unread' : 'Read', opts: ['Unread', 'Read', 'Answered'] }];
+ROUTES_X['h-notif'] = () => listPage('h-notif', {
+  title: 'Notifications', sub: 'Messages from the eMAXHealth team about your patients', noun: 'messages', filters: HN_F, rows: HMSGS, searchPh: 'Search by message text or patient',
+  head: `<button class="btn primary" data-a="modal" data-v="hmsgnew">${ic('send', 16)} New message</button>`,
+  text: m => [m.subj, m.body, fullName(m.c), m.c.id].join(' '),
+  cols: [
+    ['Patient', '220px', m => `<span class="strong ${m.unread ? 'unreadname' : ''}">${esc(fullName(m.c))}</span><span class="sub num">${m.c.id} · DOB ${fmt(m.c.dob)}</span>`],
+    ['Message', 'auto', m => `<b>${esc(m.subj)}</b><span class="sub" style="white-space:normal">${esc(m.body)}</span>${m.by && !m.answered ? `<span class="sub num ${dayDiff(m.by) < 0 ? 'overdue' : ''}">Waiting on your response by ${fmt(m.by)}</span>` : m.answered ? '<span class="sub">You replied</span>' : ''}`],
+    ['From', '190px', m => `${esc(m.from)}<span class="sub">${esc(m.role)}</span><span class="sub num">${fmt(m.sent)} ${fmtT(m.sent)}</span>`],
+    ['Type', '140px', m => `<span class="pill ${m.type === 'FYI' ? 't-info' : 't-warn'}">${m.type}</span>`]
+  ], opts: { rowAct: m => `data-a="drawer" data-v="hmsg" data-id="${m.id}"`, sel: m => S.drawer && S.drawer.id === m.id, rowCls: m => m.unread ? 'unreadrow' : '' }
+});
+
+/* ---- Upcoming Expirations ---- */
+ROUTES_X['h-exp'] = () => {
+  const tab = S.tab2['h-exp'] || 'authorizations';
+  const tabs = `<div class="seg lite">${[['authorizations', 'Authorizations', hExpiring().filter(e => e.kind === 'Authorization').length], ['benefits', 'Benefits', hExpiring().filter(e => e.kind !== 'Authorization').length], ['consents', 'Consents', hConsents().length]].map(([k, l, n]) => `<button data-a="hexptab" data-v="${k}" aria-pressed="${tab === k}">${l} <span class="num">${n}</span></button>`).join('')}</div>`;
+  const expCell = (d) => { const n = dayDiff(d); return `<span class="num ${n <= 14 ? 'overdue' : ''}">${fmt(d)}</span><span class="sub num ${n <= 14 ? 'overdue' : ''}">${n < 0 ? `${-n} days ago` : `in ${n} days`}</span>`; };
+  if (tab === 'consents') return listPage('h-expc', {
+    title: 'Upcoming Expirations', sub: 'Consents expiring within 45 days', head: tabs, noun: 'patients', rows: hConsents(), searchPh: 'Search patient or case',
+    filters: [{ key: 'via', label: 'Method provided', get: e => e.via }, { key: 'presc', label: 'Prescriber', get: e => e.c.prescriber }],
+    text: e => [fullName(e.c), e.c.id].join(' '),
+    cols: [['Patient', 'auto', e => `<a href="#" data-a="hcase" data-id="${e.c.id}" class="strong pname">${esc(fullName(e.c))}</a><span class="sub num">${e.c.id} · DOB ${fmt(e.c.dob)}</span>`], ['Consent date', '130px', e => `<span class="num">${fmt(addDays(e.exp, -365))}</span>`], ['Method provided', '160px', e => e.via], ['State', '130px', e => pill(dayDiff(e.exp) < 0 ? 'Expired' : e.sent ? 'Pending' : 'Consented')], ['Expires', '130px', e => expCell(e.exp)], ['', '170px', e => `<div class="rowacts"><button class="btn sm" data-a="modal" data-v="consentrenew" data-id="${e.c.id}">${ic('send', 14)} ${e.sent ? 'Resend' : 'Send'} renewal</button></div>`, 'r']], opts: { empty: 'No expiring consents to review. Check back later.' }
+  });
+  const kind = tab === 'authorizations' ? 'Authorization' : 'Benefits';
+  return listPage('h-exp' + tab[0], {
+    title: 'Upcoming Expirations', sub: `${kind === 'Authorization' ? 'Authorizations' : 'Benefits'} expiring within 45 days`, head: tabs, noun: 'cases', rows: hExpiring().filter(e => (e.kind === 'Authorization') === (kind === 'Authorization')), searchPh: 'Search patient, case or carrier',
+    filters: [{ key: 'win', label: 'Expires within', get: e => dayDiff(e.exp) <= 14 ? '14 days' : dayDiff(e.exp) <= 30 ? '30 days' : '45 days', opts: ['14 days', '30 days', '45 days'] }, { key: 'presc', label: 'Prescriber', get: e => e.c.prescriber }, { key: 'payer', label: 'Carrier', get: e => e.c.payer }],
+    text: e => [fullName(e.c), e.c.id, e.c.payer].join(' '),
+    cols: [['Case', '120px', e => `<a href="#" data-a="hcase" data-id="${e.c.id}" class="strong num">${e.c.id}</a>`], ['Patient', 'auto', e => `<span class="strong">${esc(fullName(e.c))}</span><span class="sub num">DOB ${fmt(e.c.dob)}</span>`], ['Prescriber', '190px', e => esc(e.c.prescriber)], ['Carrier', '230px', e => `${esc(e.c.payer)}<span class="sub num">Policy SHP${e.c.id.slice(1)} · ${fmt(addDays(e.exp, -365))} to ${fmt(e.exp)}</span>`], ['Expires', '120px', e => expCell(e.exp)], ['', '130px', e => HNOTIF_DONE[e.c.id + kind] ? `<span class="muted" style="font-size:12.5px">${esc(HNOTIF_DONE[e.c.id + kind])}</span>` : `<div class="rowacts">${splitAct(`H${kind[0]}:${e.c.id}`, 'Actions')}</div>`, 'r']],
+    opts: { empty: `No expiring ${kind === 'Authorization' ? 'authorizations' : 'benefits'} to review. Check back later.` }
+  });
+};
+
+/* ---- Secure Uploads ---- */
+ROUTES_X['h-uploads'] = () => listPage('h-uploads', {
+  title: 'Secure Uploads', sub: 'Send documents to the eMAXHealth team securely', noun: 'uploads', rows: HUPS.filter(u => !u.archived || (S.pf['h-uploads'] && S.pf['h-uploads'].arch && S.pf['h-uploads'].arch.has('Archived'))), searchPh: 'Search by description or file name',
+  filters: [{ key: 'type', label: 'Type', get: u => u.type, opts: HUP_TYPES }, { key: 'when', label: 'Uploaded', get: u => bucket(u.date), opts: DATE_OPTS }, { key: 'arch', label: 'Archived', get: u => u.archived ? 'Archived' : 'Current', opts: ['Current', 'Archived'] }],
+  head: `<button class="btn primary" data-a="modal" data-v="hupnew">${ic('upload', 16)} Upload document</button>`,
+  text: u => [u.desc, u.file, fullName(u.c)].join(' '),
+  cols: [
+    ['Description', 'auto', u => `<span class="strong">${esc(u.desc)}</span><span class="sub">${esc(fullName(u.c))} · ${u.c.id}</span>`],
+    ['Document', '260px', u => `<div class="doccell">${ic('file', 16)}<a href="#" data-a="docopen" data-v="${esc(u.file)}" data-type="${esc(u.type)}" data-date="${fmt(u.date)}">${esc(u.file)}</a></div><span class="sub">${u.size} · ${u.type}${u.archived ? ' · Archived' : ''}</span>`],
+    ['Uploaded by', '180px', u => esc(u.by)],
+    ['Uploaded', '120px', u => `<span class="num">${fmt(u.date)}</span><span class="sub num">${fmtT(u.date)}</span>`],
+    ['', '64px', u => `<button class="iconbtn" data-a="rowmenu" data-v="HU:${u.id}" aria-label="Upload actions">${ic('more', 16)}</button>`, 'r']
+  ], opts: { empty: 'No uploads found. Try adjusting your filters or search terms.' }
+});
+
+/* ---- Manage Facility Account ---- */
+ROUTES_X['h-facility'] = () => {
+  allUsers(); S.detail.facility = HCP_FAC.id; const f = HCP_FAC; const tab = S.tab2['h-facility'] || 'users';
+  const users = f.users;
+  const body = tab === 'users' ? `<div class="tp-h"><h2>Prescribers & users</h2><button class="btn primary" data-a="modal" data-v="husernew">${ic('plus', 16)} Add prescriber or user</button></div>${dtable([
+    ['Name', 'auto', u => `<span class="strong">${esc(u.name)}</span><span class="sub">${esc(u.role === 'Prescriber' ? 'Prescriber' : u.role === 'Administrator' ? 'Facility administrator' : u.role)}</span>`],
+    ['Contact', '230px', u => `${esc(u.email)}<span class="sub num">Office (310) 709-4563</span>`],
+    ['Identifiers', '190px', u => u.role === 'Prescriber' ? `<span class="num">NPI ${u.npi || '1' + (u.name.length * 791234 % 999999999).toString().padStart(9, '0')}</span><span class="sub">Endocrinology · CA license</span>` : '<span class="muted">None</span>'],
+    ['Status', '140px', u => statusPill(u.status)],
+    ['', '120px', u => splitAct('u' + u.ref), 'r']
+  ], users)}` : `<div class="tp-h"><h2>Locations</h2><button class="btn primary" data-a="modal" data-v="locnew">${ic('plus', 16)} Add location</button></div>${dtable([['Location', 'auto', l => `<span class="strong">${esc(l.name)}</span>${pinAddr(l.st, l.city).replace('class="addr"', 'class="addr sub-addr"')}`], ['Phone', '150px', l => `<span class="num">${l.phone}</span>`], ['Fax', '150px', l => l.fax ? `<span class="num">${l.fax}</span>` : '<span class="muted">None</span>'], ['NPI', '130px', l => `<span class="num">${l.npi}</span>`], ['Tax ID', '130px', l => `<span class="num">${l.tax || f.tax}</span>`]], f.locs)}`;
+  const nameEdit = S.hFacEdit ? `<span class="inlineedit"><input id="hfacname" value="${esc(f.name)}"><button class="btn sm primary" data-a="hfacsave">${ic('check', 14)} Save</button><button class="btn sm ghost" data-a="hfacedit">Cancel</button></span>` : `<span class="nm">${esc(f.name)}</span><button class="iconbtn" data-a="hfacedit" aria-label="Edit facility name">${ic('edit', 15)}</button>`;
+  return `<div class="page"><section class="card"><div class="casehead"><div class="who"><span class="ini" style="border-radius:10px">${ic('building', 20)}</span><div><div style="display:flex;gap:8px;align-items:center">${nameEdit}</div><div class="ids"><span>${esc(f.type)}</span><span>NPI ${f.npi}</span><span>${f.locs.length} ${f.locs.length === 1 ? 'location' : 'locations'}</span></div></div></div></div></section>
+  <div class="caselayout side-left"><div class="sidecol"><section class="card"><div class="card-h"><h3>Facility details</h3></div><div class="card-b kvp"><div class="fields">${fld('Primary contact', f.contact, false)}${fld('Phone', f.phone)}${fld('Fax', f.fax)}${fld('NPI', f.npi)}${fld('Tax ID', f.tax)}</div><div class="kv-sub">Main location</div><div class="fields">${fld('Address', `${f.locs[0].st}, ${f.locs[0].city}`)}</div></div></section></div>
+  <div><div class="tabs" role="tablist">${[['users', 'Prescribers & users', users.length], ['locs', 'Locations', f.locs.length]].map(([k, l, n]) => `<button role="tab" aria-selected="${tab === k}" data-a="tab2" data-k="h-facility" data-v="${k}">${l} <span class="n num">${n}</span></button>`).join('')}</div><div class="tabpanel">${body}</div></div></div></div>`;
+};
+
+/* ---- Profile ---- */
+ROUTES_X['h-profile'] = () => `<div class="page"><div class="pagehead"><div><h1>Profile</h1><div class="muted" style="font-size:13px">Your portal account at ${esc(HCP_FAC.name)}</div></div></div>
+  <div class="caselayout side-left"><div class="sidecol"><section class="card"><div class="card-b" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:24px"><span class="avatar" style="width:72px;height:72px;font-size:24px">TA</span><b style="font:600 17px var(--f-head)">${esc(HCP_USER.honor)} ${esc(HCP_USER.name)}</b><span class="muted">${esc(HCP_USER.role)}</span></div></section>
+  <section class="card"><div class="card-h"><h3>Security</h3></div><div class="card-b" style="display:flex;flex-direction:column;gap:10px"><span class="muted" style="font-size:13px">Password last changed 3 months ago.</span><button class="btn" data-a="modal" data-v="pwchange">${ic('key', 16)} Change password</button></div></section></div>
+  <section class="card"><div class="card-h"><h2>Profile details</h2><button class="btn sm" data-a="edit" data-v="hprofile">${ic('edit', 14)} Edit</button></div><div class="card-b kvp"><div class="fields">${fld('Name', `${HCP_USER.honor} ${HCP_USER.first} ${HCP_USER.last}`, false)}${fld('Role', HCP_USER.role, false)}${fld('Email', HCP_USER.email)}${fld('Mobile', HCP_USER.mobile)}${fld('Phone', HCP_USER.phone)}${fld('Fax', HCP_USER.fax)}</div></div></section></div></div>`;
+EDITS.hprofile = { title: 'Edit profile', fields: (u) => [['honor', 'Honorific', { v: u.honor, opts: ['Dr.', 'Mr.', 'Ms.', 'Mx.'], ph: false }], ['first', 'First name', { v: u.first, req: 1 }], ['last', 'Last name', { v: u.last, req: 1 }], ['email', 'Email address', { v: u.email, req: 1, type: 'email' }], ['mobile', 'Mobile', { v: u.mobile, w: 220 }], ['phone', 'Phone', { v: u.phone, w: 220 }], ['fax', 'Fax', { v: u.fax, w: 220 }]], save: (u, v) => { Object.assign(u, v); u.name = `${v.first} ${v.last}`; } };
+const _editTargetH = editTarget;
+editTarget = (d) => d.id === 'hprofile' ? HCP_USER : _editTargetH(d);
+
+/* ---- Patient details ---- */
+const readOnly = (html) => html.replace(/<button class="editbtn"[^>]*>[\s\S]*?<\/button>/g, '');
+ROUTES_X['h-patient'] = () => {
+  const p = patientOf(S.detail.hpatient) || { pid: hcpCases()[0].pid, c: hcpCases()[0], cases: [hcpCases()[0].id] }; const c = p.c;
+  const cases = CASES.filter(x => x.pid === p.pid || (p.cases || []).includes(x.id)).filter(x => x.facility === HCP_FAC.name);
+  return `<div class="page"><div class="crumbs"><a href="#" data-a="go" data-r="h-search">Search Patients</a>${ic('chevr', 12)}<span>${esc(fullName(c))}</span></div>
+  <section class="card"><div class="casehead"><div class="who"><span class="ini">${c.first[0]}${c.last[0]}</span><div><div style="display:flex;gap:10px;align-items:center"><span class="nm">${esc(c.last.toUpperCase())}, ${esc(c.first)} ${c.mi}.</span>${pill(c.consent)}</div><div class="ids"><span>Patient <span class="mono" style="color:var(--ink)">${p.pid}</span>${copyBtn(p.pid, 'patient ID')}</span><span class="num">DOB ${fmt(c.dob)}</span></div></div></div>
+  <div class="acts"><button class="btn primary" data-a="hnewfor" data-id="${p.pid}">${ic('plus', 16)} New case for this patient</button></div></div></section>
+  <div class="caselayout side-left"><div class="sidecol"><section class="card"><div class="card-h"><h3>Patient demographics</h3></div><div class="card-b kvp">${readOnly(patientFields(c))}</div></section></div>
+  <section class="card"><div class="card-h"><h2>Cases</h2><span class="muted num" style="font-size:13px">${cases.length}</span></div>${dtable([['Case', '130px', x => `<a href="#" data-a="hcase" data-id="${x.id}" class="strong">${x.id}</a>`], ['Intake date', '120px', x => `<span class="num">${fmt(x.start)}</span>`], ['Prescriber', 'auto', x => `${esc(x.prescriber)}<span class="sub">${esc(locOf(x).name)}</span>`], ['Pharmacy', '160px', x => esc(x.pharmacy)], ['Case status', '220px', x => `${pill(x.caseStatus)}${x.sub ? `<span class="sub">${esc(x.sub)}</span>` : ''}`]], cases, { rowAct: x => `data-a="hcase" data-id="${x.id}"` })}</section></div></div>`;
+};
+
+/* ---- Case details (portal view) ---- */
+const HTABS = [['info', 'Case information'], ['benefits', 'Benefits'], ['notes', 'Notes'], ['messages', 'Messages'], ['docs', 'Documents'], ['dispense', 'Dispense history']];
+const hcpDocs = (c) => DOCS.filter(d => d[5]).map(d => ({ name: d[0], cat: d[1], date: d[2], by: d[3], size: d[4] })).concat(HUPS.filter(u => u.c.id === c.id).map(u => ({ name: u.file, cat: u.type, date: fmt(u.date), by: u.by, size: u.size, desc: u.desc })));
+const hcpMsgs = (c) => HMSGS.filter(m => m.c.id === c.id);
+ROUTES_X['h-case'] = () => {
+  const c = byId(S.caseId) || hcpCases()[0]; const tab = S.htab || 'info'; const I = info(c); const R = rxOf(c);
+  const dock = `<aside class="dock ${S.dockL ? '' : 'closed'}" aria-label="Patient"><div class="dock-head">${ic('users', 16)}<h3>Patient</h3><button class="iconbtn" data-a="dockL" aria-label="Toggle patient panel">${ic(S.dockL ? 'chevl' : 'chevr', 16)}</button><span class="vlabel">Patient</span></div><div class="dock-body kvp patientpane">${readOnly(patientFields(c))}</div></aside>`;
+  const glance = [['Case status', `${pill(c.caseStatus)}${c.sub ? `<span class="substat">${esc(c.sub)}</span>` : ''}`], ['Coverage', pill(c.coverage)], ['PAP', pill(c.pap)], ['Dispense', pill(c.ship)], ['Starter supply', `<span>${c.ship === 'Shipped' ? 'Not needed' : 'Not requested'}</span>`], ['Specialty pharmacy', `<span>${esc(c.pharmacy)}</span>`]];
+  let body = '';
+  if (tab === 'info') body = `${tph('Case information')}<div class="blocks">
+    <div class="block" data-sec="Intake"><div class="section-t">${ic('file', 15)}Intake</div><div class="fields">${fld('Entered by', 'Marketta Howie', false)}${fld('Started on', fmt(c.start))}${fld('Location', locOf(c).name, false)}</div></div>
+    <div class="block" data-sec="Consent"><div class="section-t">${ic('shield', 15)}Consent</div><div class="fields"><div class="fld"><span class="lbl">Status</span><span class="val">${pill(c.consent)}</span></div>${fld('Consent start', I.consent.start)}${fld('Consent end', I.consent.end)}${fld('Texting', I.consent.text, false)}${fld('Phone messages', I.consent.vm, false)}</div></div>
+    <div class="block" data-sec="Medical necessity"><div class="section-t">${ic('heart', 15)}Medical necessity</div><div class="fields">${fld('Primary diagnosis', I.medical.dx)}${fld('Secondary diagnosis', I.medical.dx2)}${fld('Other therapy', I.medical.other, false)}${fld('Surgery ineligibility', I.medical.surg, false)}</div></div>
+    <div class="block" data-sec="Prescription"><div class="section-t">${ic('pill', 15)}Prescription<span class="sp"></span><span class="rxdoc">${ic('file', 14)} ${rxLink(c, 'View signed prescription')}</span></div><div class="fields">${fld('Medication', R.cur.med)}${fld('Written', R.cur.written)}${fld('Initial quantity', `${R.cur.qty} · ${R.cur.days} day supply`, false)}${fld('Refills', R.cur.refills, false)}${fld('Dispensing', R.cur.dispense, false)}<div class="fld"><span class="lbl">Directions</span><span class="val">${esc(R.cur.directions)}</span></div></div></div>
+    <div class="block full" data-sec="Prescriber"><div class="section-t">${ic('users', 15)}Prescriber information</div><div class="fields">${fld('Prescriber', c.prescriber, false)}${fld('NPI', I.presc.npi)}${fld('Phone', I.presc.phone)}${fld('Fax', I.presc.fax)}${fld('Facility', c.facility, false)}${fld('Location', `${locOf(c).name}, ${locOf(c).city}`, false)}</div></div></div>`;
+  if (tab === 'benefits') body = `${tph('Benefits', `<span class="muted" style="font-size:12.5px">Verified ${I.bi.date} by the eMAXHealth team</span>`)}${c.payer === 'No insurance' ? '<div class="emptyline">The patient has no insurance on file. The eMAXHealth team is reviewing patient assistance options.</div>' : `
+    <div class="tablewrap"><table class="dt"><thead><tr><th>Order</th><th>Plan</th><th>Type</th><th>Member ID</th><th>BIN / PCN</th><th>Effective</th><th>Outcome</th></tr></thead><tbody>${I.plans.map(p => `<tr><td>${p.order}</td><td class="strong">${esc(p.name)}</td><td>${esc(p.type)}</td><td class="mono">${esc(p.member)}</td><td class="mono">${esc(p.bin || '')}</td><td class="num">${esc(p.eff)}</td><td>${pill(p.cov || c.coverage)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="blocks"><div class="block" data-sec="Pharmacy benefits"><div class="section-t">${ic('card', 15)}Pharmacy benefits</div><div class="fields">${fld('Deductible', I.bi.ded, false)}${fld('Out of pocket max', I.bi.oop, false)}${fld('Specialty copay', I.bi.copay, false)}${fld('PA required', I.bi.pa, false)}${fld('Quantity limit', I.bi.ql, false)}</div></div>
+    <div class="block" data-sec="Authorization requests"><div class="section-t">${ic('shield', 15)}Authorization requests</div><div class="fields">${fld('Type', 'Prior authorization', false)}<div class="fld"><span class="lbl">Status</span><span class="val">${c.ar === 'None' ? '<span class="muted">None yet</span>' : pill(c.ar)}</span></div><div class="fld"><span class="lbl">Outcome</span><span class="val">${pill(c.coverage)}</span></div></div></div>
+    <div class="block full" data-sec="Coverage notes"><div class="section-t">${ic('chat', 15)}Coverage notes</div><div class="feed" style="margin:0 -16px">${I.covnotes.map(([d, w, t]) => `<div class="msg" style="grid-template-columns:1fr"><div class="hd"><b>${w}</b><span class="muted num">${d}</span></div><p style="grid-column:1">${esc(t)}</p></div>`).join('')}</div></div></div>`}`;
+  if (tab === 'notes') body = `${tph('Notes and phone log', '<span class="muted" style="font-size:12.5px">Shared by the eMAXHealth team. Read only.</span>')}<div class="feed">${NOTES.map(([w, type, d, t, hl]) => `<div class="msg ${hl ? 'hlnote' : ''}"><span class="avatar">${w.split(' ').map(x => x[0]).join('')}</span><div class="hd"><b>${esc(w)}</b><span class="pill nodot ${type === 'Note' ? 't-navy' : 't-info'}">${type === 'Note' ? 'HCP note' : 'Phone'}</span><span class="muted num">${d}</span></div><span></span><p><span class="${hl ? 'hltext' : ''}">${esc(t)}</span></p></div>`).join('')}</div>`;
+  if (tab === 'messages') { const ms = hcpMsgs(c); body = `${tph('Messages', '<span class="muted" style="font-size:12.5px">Messages go to the eMAXHealth team</span>')}
+    <div class="composer top ${S.hmErr ? 'err' : ''}"><span class="avatar">TA</span><div class="cbody"><div class="polgrid"><div class="input"><label class="lbl" for="hmsubj">Subject</label><input id="hmsubj" placeholder="What is this about?" value="${esc(S.hmSubj || '')}"></div><div class="input"><label class="lbl" for="hmto">To</label><select id="hmto">${['Patient Access Coordinator', 'Patient Advocate', 'Field Reimbursement Manager', 'Pharmacy'].map(x => `<option>${x}</option>`).join('')}</select></div></div><label class="sr" for="hmbody">Message</label><textarea id="hmbody" placeholder="Write a message">${esc(S.hmDraft || '')}</textarea>${S.hmErr ? errField('Add a subject and a message') : ''}<div class="crow"><select id="hmtype" aria-label="Type"><option>FYI</option><option>Action needed</option></select><span class="muted" style="font-size:12px">The team usually replies within one business day</span><span class="sp"></span><button class="btn primary" data-a="hmsend" data-id="${c.id}">${ic('send', 16)} Send</button></div></div></div>
+    <div class="feed">${ms.map(m => `<div class="msg"><span class="avatar" style="background:var(--navy)">${m.from.split(' ').map(x => x[0]).join('')}</span><div class="hd"><b>${esc(m.from)}</b><span class="pill nodot ${m.type === 'FYI' ? 't-info' : 't-warn'}">${m.type}</span><span class="muted num">${fmt(m.sent)} ${fmtT(m.sent)}</span></div><span></span><p><b>${esc(m.subj)}.</b> ${esc(m.body)}</p>${m.replies.map(r => `<p style="grid-column:2/-1;margin-top:6px" class="muted">You replied: ${esc(r)}</p>`).join('')}</div>`).join('') || '<div class="emptyline">No messages on this case yet.</div>'}</div>`; }
+  if (tab === 'docs') { const ds = hcpDocs(c); body = `${tph('Documents', `<button class="btn primary" data-a="modal" data-v="hupnew" data-id="${c.id}">${ic('plus', 16)} Add document</button>`)}<div class="tablewrap"><table class="dt"><thead><tr><th>Category</th><th>Document</th><th>Added</th><th>Added by</th><th>Size</th></tr></thead><tbody>${ds.map(d => `<tr><td>${esc(d.cat)}</td><td>${ic('file', 15)} <a href="#" data-a="docopen" data-v="${esc(d.name)}" data-type="${esc(d.cat)}" data-date="${esc(d.date)}">${esc(d.name)}</a>${d.desc ? `<span class="sub">${esc(d.desc)}</span>` : ''}</td><td class="num">${esc(d.date)}</td><td>${esc(d.by)}</td><td class="num">${esc(d.size)}</td></tr>`).join('')}</tbody></table></div>`; }
+  if (tab === 'dispense') { const fills = c.ship === 'Shipped' ? [[fmt(addDays(TODAY, -12)), R.cur.qty, R.cur.days, 'Shipped', '1Z84F0391'], [fmt(addDays(TODAY, -42)), R.cur.qty, R.cur.days, 'Delivered', '1Z84F0118']] : []; body = `${tph('Dispense history', `<span class="muted" style="font-size:12.5px">From ${esc(c.pharmacy)}</span>`)}${fills.length ? dtable([['Ship date', '130px', f => `<span class="num">${f[0]}</span>`], ['Quantity', '110px', f => `<span class="num">${f[1]}</span>`], ['Days supply', '120px', f => `<span class="num">${f[2]}</span>`], ['Status', '140px', f => pill(f[3] === 'Delivered' ? 'Covered' : 'Shipped').replace('>Covered<', '>Delivered<')], ['Tracking', 'auto', f => `<span class="mono">${f[4]}</span>`]], fills) : `<div class="emptyline">No fills yet. Shipments appear here once ${esc(c.pharmacy)} ships the first fill.</div>`}`; }
+  const center = `<div class="center"><div class="page"><div class="crumbrow"><div class="crumbs"><a href="#" data-a="go" data-r="h-search">Search Patients</a>${ic('chevr', 12)}<span>${esc(fullName(c))}</span></div></div>
+    <section class="card cq"><div class="casehead"><div class="who"><span class="ini">${c.first[0]}${c.last[0]}</span><div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="nm">${esc(c.last.toUpperCase())}, ${esc(c.first)}${c.mi ? ' ' + c.mi + '.' : ''}</span>${pill(c.consent)}</div>
+      <div class="ids"><span>Case <span class="mono" style="color:var(--ink)">${c.id}</span>${copyBtn(c.id, 'case ID')}</span><span>Patient <a href="#" class="mono idlink" data-a="patient" data-id="${c.pid}">${c.pid}</a>${copyBtn(c.pid, 'patient ID')}</span><span class="num">DOB ${fmt(c.dob)}</span><span class="rxid">${ic('file', 13)} ${rxLink(c, 'Active prescription')}</span></div></div></div>
+      <div class="acts"><button class="btn" data-a="htab" data-v="messages">${ic('send', 16)} Message the team</button><button class="btn primary" data-a="modal" data-v="hupnew" data-id="${c.id}">${ic('upload', 16)} Upload document</button></div></div>
+      <div class="statusstrip glance">${glance.map(([l, v]) => `<div class="sf"><span class="lbl">${l}</span>${v}</div>`).join('')}</div></section>
+    <div><div class="tabs" role="tablist">${HTABS.map(([k, l]) => { const n = k === 'messages' ? hcpMsgs(c).length : k === 'docs' ? hcpDocs(c).length : k === 'notes' ? NOTES.length : null; return `<button role="tab" aria-selected="${tab === k}" data-a="htab" data-v="${k}">${l}${n ? ` <span class="n num">${n}</span>` : ''}</button>`; }).join('')}</div><div class="tabpanel" role="tabpanel">${body}</div></div></div></div>`;
+  return `<div class="workspace">${dock}${center}</div>`;
+};
+
+/* ---- Created screen, drawers, menus, modals ---- */
+const _viewCreatedH = viewCreated;
+viewCreated = function () {
+  let h = _viewCreatedH(); if (!isHCP()) return h; const c = byId(S.createdId);
+  return h.replace('The case is in the queue and the care team has been notified.', 'The eMAXHealth team has been notified and will start benefits verification.').replace(`<b>${esc(c.owner)}</b>`, '<b>eMAXHealth Patient Services</b>').replace('data-a="go" data-r="cases">Back to cases', 'data-a="go" data-r="h-search">Back to patients').replace(`data-a="case" data-id="${c.id}"`, `data-a="hcase" data-id="${c.id}"`);
+};
+const _drawerH = drawer;
+drawer = function () {
+  const d = S.drawer; if (!d || d.type !== 'hmsg') return _drawerH();
+  const m = HMSGS.find(x => x.id === d.id); m.unread = false;
+  const body = `<div style="display:flex;gap:8px;align-items:center"><span class="pill ${m.type === 'FYI' ? 't-info' : 't-warn'}">${m.type}</span>${m.by && !m.answered ? `<span class="num ${dayDiff(m.by) < 0 ? 'overdue' : 'muted'}" style="font-size:13px">Respond by ${fmt(m.by)}</span>` : ''}</div>
+    <div class="fields">${fld('Patient', `${fullName(m.c)} · ${m.c.id}`, false)}${fld('From', `${m.from}, ${m.role}`, false)}${fld('Received', `${fmt(m.sent)} ${fmtT(m.sent)}`, false)}</div>
+    <div class="thread"><div class="bubble in"><div class="hd"><b>${esc(m.subj)}</b><span class="muted num">${fmtT(m.sent)}</span></div><p>${esc(m.body)}</p></div>${m.replies.map(r => `<div class="bubble out"><div class="hd"><b>You</b><span class="muted">Just now</span></div><p>${esc(r)}</p></div>`).join('')}</div>
+    ${inp('hreply', `Reply to ${esc(m.from)}`, { area: 1, h: 110, phText: 'Write a reply. It goes to the eMAXHealth team.' })}`;
+  const foot = `<button class="btn" data-a="hcase" data-id="${m.c.id}">Open case</button><span style="flex:1"></span><button class="btn" data-a="modal" data-v="hupnew" data-id="${m.c.id}">${ic('upload', 16)} Attach document</button><button class="btn primary" data-a="hreply" data-id="${m.id}">${ic('send', 16)} Send reply</button>`;
+  const enter = LAST_DRAWER !== d.type + d.id && !LAST_DRAWER;
+  return `<div class="drawer-scrim ${enter ? 'enter' : ''}" data-a="drawerclose"></div><aside class="drawer ${enter ? 'enter' : ''}" role="dialog" aria-label="${esc(m.subj)}"><div class="drawer-h"><h2>${esc(m.subj)}</h2><button class="iconbtn" data-a="drawerclose" aria-label="Close">${ic('x', 18)}</button></div><div class="drawer-b">${body}</div><div class="drawer-f">${foot}</div></aside>`;
+};
+const _popH = popMenu;
+popMenu = function () {
+  const p = S.pop; if (!p) return '';
+  let items = null;
+  if (/^H[AB]:/.test(p.id)) { const kind = p.id[1] === 'A' ? 'Authorization' : 'Benefits', id = p.id.slice(3); const acts = kind === 'Authorization' ? ['No further authorization needed', 'New authorization needed, same insurance', 'New authorization needed, new insurance'] : ['No reverification needed', 'Reverify same insurance', 'Verify new insurance']; items = acts.map((a, i) => `<button data-a="modal" data-v="hexpact" data-id="${kind}|${id}|${i}">${ic(i === 0 ? 'check' : i === 1 ? 'refresh' : 'card', 16)} ${a}</button>`).join(''); }
+  if (p.id.startsWith('HU:')) { const u = HUPS.find(x => x.id === p.id.slice(3)); items = `<button data-a="docopen" data-v="${esc(u.file)}" data-type="${esc(u.type)}">${ic('file', 16)} Preview</button><button data-a="huarch" data-id="${u.id}">${ic('folder', 16)} ${u.archived ? 'Restore' : 'Archive'}</button>`; }
+  if (items == null) return _popH();
+  const left = Math.max(12, Math.min(p.x - 260, window.innerWidth - 280)); const top = p.y + 200 > window.innerHeight ? p.y - p.h - 8 - 150 : p.y + 6;
+  return `<div class="menu-pop pop-fixed" style="position:fixed;left:${left}px;top:${Math.max(8, top)}px;width:280px">${items}</div>`;
+};
+const _xmH = extraModal;
+extraModal = function (m, wrap) {
+  const cancel = `<button class="btn" data-a="mclose">Cancel</button>`, e = m.err || {};
+  if (m.type === 'hupnew') { const cs = hcpCases(); return wrap('Upload document', `${inp('hupcase', 'Patient case', { req: 1, err: e.c, opts: cs.map(c => `${c.id} · ${fullName(c)}`), v: m.id ? (cs.find(c => c.id === m.id) ? `${m.id} · ${fullName(byId(m.id))}` : '') : '' })}${inp('huptype', 'Type', { req: 1, err: e.t, opts: HUP_TYPES })}
+      <label class="dropzone ${e.f ? 'err' : ''}"><input type="file" id="docfile">${ic('upload', 22)}<span><b>${S.pickName ? esc(S.pickName) : 'Choose a file'}</b><br><span class="muted">PDF or image, up to 2 MB</span></span></label>${e.f ? errField('Choose a file to upload') : ''}
+      ${inp('hupdesc', 'Description or instructions', { area: 1, h: 80, req: 1, err: e.d, phText: 'What is this and what should the team do with it?' })}`, `${cancel}<button class="btn primary" data-a="hupsave">${ic('upload', 16)} Upload</button>`); }
+  if (m.type === 'hmsgnew') { const cs = hcpCases(); return wide(wrap('New message', `<div class="polgrid">${inp('hmcase', 'Patient case', { req: 1, err: e.c, opts: cs.map(c => `${c.id} · ${fullName(c)}`) })}${inp('hmtype2', 'Type', { opts: ['FYI', 'Action needed'], ph: false })}${inp('hmsubj2', 'Subject', { req: 1, err: e.s })}${inp('hmby', 'Respond by', { type: 'date', opt: 1 })}</div>${inp('hmbody2', 'Message', { area: 1, h: 110, req: 1, err: e.b })}<div class="input"><span class="lbl">Recipients</span><div style="display:flex;gap:16px;flex-wrap:wrap">${['Patient Access Coordinator', 'Patient Advocate', 'Field Reimbursement Manager', 'Pharmacy'].map((x, i) => chk('hmr' + i, x, i === 0)).join('')}</div></div>`, `${cancel}<button class="btn primary" data-a="hmsgsave">${ic('send', 16)} Send message</button>`)); }
+  if (m.type === 'hexpact') { const [kind, id, i] = m.id.split('|'); const c = byId(id); const acts = kind === 'Authorization' ? ['No further authorization needed', 'New authorization needed, same insurance', 'New authorization needed, new insurance'] : ['No reverification needed', 'Reverify same insurance', 'Verify new insurance']; const a = acts[+i];
+    if (+i > 0 && c.id === CASES[0].id) return wrap('This request cannot be processed', `<p style="margin:0">A new case cannot be created for ${esc(fullName(c))} until case ${c.id} is closed. Please contact the eMAXHealth team at 1-555-867-5309.</p>`, `<button class="btn primary" data-a="mclose">Close</button>`);
+    if (+i === 2) return wide(wrap(a, `<p class="muted" style="margin:0;font-size:13px">${esc(fullName(c))} · ${c.id}. The eMAXHealth team verifies the new plan and opens a new case.</p><div class="polgrid">${inp('nicar', 'Carrier', { req: 1, err: e.car, opts: [...CARRIERS.map(x => x.name), ...PBMS.map(x => x.name)] })}${inp('niph', 'Carrier phone', { opt: 1 })}${inp('nipol', 'Policy ID', { req: 1, err: e.pol })}${inp('nirel', 'Relationship to cardholder', { req: 1, err: e.rel, opts: ['Self', 'Spouse', 'Child', 'Other'] })}${inp('nichn', 'Cardholder name', { opt: 1 })}${inp('nichd', 'Cardholder DOB', { type: 'date', opt: 1 })}</div>`, `${cancel}<button class="btn primary" data-a="hexpsave" data-id="${m.id}">Save and send</button>`));
+    return wrap(a + '?', `<p style="margin:0">${+i === 0 ? `This tells the eMAXHealth team that ${esc(fullName(c))} does not need a new ${kind === 'Authorization' ? 'authorization' : 'benefits verification'}.` : `The eMAXHealth team opens a new case for ${esc(fullName(c))} and verifies ${esc(c.payer)} again.`}</p>`, `${cancel}<button class="btn primary" data-a="hexpsave" data-id="${m.id}">Confirm</button>`); }
+  if (m.type === 'husernew') return wide(wrap('Add prescriber or user', `<div class="seg lite">${['Facility administrator', 'Office staff', 'Prescriber'].map(x => `<button data-a="hurole" data-v="${x}" aria-pressed="${(S.huRole || 'Prescriber') === x}">${x}</button>`).join('')}</div><div class="polgrid">${inp('hufirst', 'First name', { req: 1, err: e.f })}${inp('hulast', 'Last name', { req: 1, err: e.l })}${inp('huoffice', 'Office number', { req: 1, err: e.o })}${inp('humobile', 'Mobile', { opt: 1 })}${inp('huemail', 'Email', { req: 1, err: e.e, type: 'email' })}${(S.huRole || 'Prescriber') === 'Prescriber' ? inp('hunpi', 'NPI', { req: 1, err: e.n }) + inp('hulic', 'State license', { opt: 1 }) : ''}</div>${chk('huinvite', 'Send an invite email to set a password', true)}`, `${cancel}<button class="btn primary" data-a="husave">Add ${esc((S.huRole || 'Prescriber').toLowerCase())}</button>`));
+  return _xmH(m, wrap);
+};
+const hId = (sel) => (val(sel) || '').split(' ')[0];
+Object.assign(EXTRA, {
+  appswitch() { S.app = isHCP() ? 'hub' : 'hcp'; try { localStorage.setItem('hp-app', S.app); } catch (e) { } S.menu = null; S.drawer = null; S.modal = null; applyApp(); go(isHCP() ? 'h-dash' : 'dashboard'); toast(isHCP() ? 'Switched to the HCP portal' : 'Switched to the HealthPacer Hub'); },
+  hhue(t) { S.hue = t.dataset.v; try { localStorage.setItem('hp-hcphue', S.hue); } catch (e) { } applyHue(); S.menu = 'acct'; },
+  hnew() { EXTRA.newcase(); },
+  hnewfor(t) { EXTRA.newcasefor(t); },
+  hcase(t) { hOpenCase(t.dataset.id); },
+  htab(t) { S.htab = t.dataset.v; S.menu = null; },
+  hexptab(t) { S.tab2['h-exp'] = t.dataset.v; if (S.route !== 'h-exp') go('h-exp'); },
+  hdrill(t) { const st = S.pf['h-search'] = S.pf['h-search'] || Object.fromEntries(HS_F.map(f => [f.key, new Set()])); Object.values(st).forEach(s => s.clear()); const v = t.dataset.v; if (v === 'intake') ['Intake', 'Requested'].forEach(x => st.st.add(x)); if (v === 'pending') CASE_STATUS.filter(x => x.startsWith('Pending')).forEach(x => st.st.add(x)); if (v === 'active') ['BI', 'Active'].forEach(x => st.st.add(x)); if (v === 'coverage') ['Covered', 'Approved'].forEach(x => st.cov.add(x)); go('h-search'); },
+  hmsend(t) { const s = val('hmsubj'), b = val('hmbody'); if (!s || !b) { S.hmErr = true; S.hmSubj = s; S.hmDraft = b; return; } const c = byId(t.dataset.id); HMSGS.unshift({ id: uid('HM'), c, subj: s, body: b, type: val('hmtype'), from: HCP_USER.name, role: HCP_USER.role, sent: new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate(), new Date().getHours(), new Date().getMinutes()), by: null, unread: false, answered: true, replies: [] }); MESSAGES.unshift([`${HCP_USER.name} (${HCP_FAC.name})`, 'HCP', nowStamp(), `${s}. ${b}`, ['From provider']]); S.hmErr = false; S.hmSubj = S.hmDraft = ''; toast('Message sent to the eMAXHealth team'); },
+  hmsgsave() { const cs = hId('hmcase'), s = val('hmsubj2'), b = val('hmbody2'), err = {}; if (!cs) err.c = 'Choose a case'; if (!s) err.s = 'Add a subject'; if (!b) err.b = 'Write a message'; if (Object.keys(err).length) { S.modal.err = err; return; } const c = byId(cs); HMSGS.unshift({ id: uid('HM'), c, subj: s, body: b, type: val('hmtype2'), from: HCP_USER.name, role: HCP_USER.role, sent: new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate(), new Date().getHours(), new Date().getMinutes()), by: null, unread: false, answered: true, replies: [] }); MESSAGES.unshift([`${HCP_USER.name} (${HCP_FAC.name})`, 'HCP', nowStamp(), `${s}. ${b}`, ['From provider']]); S.modal = null; toast('Message has been sent'); },
+  hreply(t) { const m = HMSGS.find(x => x.id === t.dataset.id); const v = val('hreply'); if (!v) { toast('Write a reply first'); return; } m.replies.push(v); m.answered = true; const el = document.getElementById('hreply'); if (el) el.value = ''; toast('Reply sent to the eMAXHealth team'); },
+  hupsave() { const cs = hId('hupcase'), ty = val('huptype'), d = val('hupdesc'), err = {}; if (!cs) err.c = 'Choose a case'; if (!ty) err.t = 'Choose a type'; if (!S.pickName) err.f = 1; if (!d) err.d = 'Add a short description'; if (Object.keys(err).length) { S.modal.err = err; return; } const c = byId(cs); HUPS.unshift({ id: uid('HU'), c, type: ty, file: S.pickName, size: S.pickSize || '1.1 MB', desc: d, by: HCP_USER.name, date: new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate(), new Date().getHours(), new Date().getMinutes()), archived: false }); UPLOADS.unshift({ id: uid('U'), file: S.pickName, type: ty, facility: HCP_FAC.name, by: HCP_USER.name, date: new Date(), desc: d, hint: c.id, assigned: null }); S.modal = null; S.pickName = null; toast('Document uploaded successfully'); },
+  huarch(t) { const u = HUPS.find(x => x.id === t.dataset.id); u.archived = !u.archived; S.pop = null; toast(u.archived ? 'Upload archived' : 'Upload restored'); },
+  hexpsave(t) { const [kind, id, i] = t.dataset.id.split('|'); const c = byId(id); if (+i === 2) { const err = {}; if (!val('nicar')) err.car = 'Choose a carrier'; if (!val('nipol')) err.pol = 'Enter the policy ID'; if (!val('nirel')) err.rel = 'Choose one'; if (Object.keys(err).length) { S.modal.err = err; return; } } const newId = 'E' + (100304 + CASES.length * 7 + Math.floor(Math.random() * 90)); HNOTIF_DONE[id + kind] = +i === 0 ? 'Marked as not needed' : `New case ${newId}`; S.modal = null; toast(+i === 0 ? 'Update successful' : `Case created successfully, new case ${newId}`); },
+  hurole(t) { S.huRole = t.dataset.v; },
+  husave() { const r = S.huRole || 'Prescriber', v = { f: val('hufirst'), l: val('hulast'), o: val('huoffice'), e: val('huemail'), n: val('hunpi') }, err = {}; if (!v.f) err.f = 'Required'; if (!v.l) err.l = 'Required'; if (!v.o) err.o = 'Required'; if (!/.+@.+\..+/.test(v.e)) err.e = 'Enter a valid email'; if (r === 'Prescriber' && !v.n) err.n = 'Prescribers need an NPI'; if (Object.keys(err).length) { S.modal.err = err; return; } const name = (r === 'Prescriber' ? 'Dr. ' : '') + v.f + ' ' + v.l; HCP_FAC.users.push({ name, email: v.e, role: r === 'Facility administrator' ? 'Administrator' : r, status: val('huinvite') ? 'Invite pending' : 'Active', npi: v.n }); if (r === 'Prescriber') PRESCRIBERS.push([name, HCP_FAC.name]); S.modal = null; S.huRole = null; toast(`${name} added${val('huinvite') ? '. Invite sent' : ''}`); },
+  hfacedit() { S.hFacEdit = !S.hFacEdit; },
+  hfacsave() { const v = val('hfacname'); if (!v) return; const old = HCP_FAC.name; HCP_FAC.name = v; CASES.forEach(c => { if (c.facility === old) c.facility = v; }); S.hFacEdit = false; toast('Facility name updated successfully'); }
+});
+document.addEventListener('input', (e) => { if (e.target.id === 'hmbody') S.hmDraft = e.target.value; if (e.target.id === 'hmsubj') S.hmSubj = e.target.value; });
+
+/* ---- Notes panel: what the portal maps to in the designs ---- */
+const NOTES_HCP = {
+  'h-dash': [['HCP Dashboard', 'Same bento pattern as the Hub dashboard. Tiles follow the designs: Intake, Pending, Requested & active, Coverage identified, plus cases in intake, cases pending and recent coverage updates. Added: messages that need your response and what expires in the next 45 days.']],
+  'h-search': [['Search Patients', 'Same list pattern as the Hub: filters in a side panel, chips, pagination. Filters from the designs: prescriber, location, case status, authorization status, coverage, PAP and dispense status.']],
+  'h-notif': [['Notifications', 'Communications history from the designs, with Action needed and FYI, who owes a response and by when. Opening one shows the thread and a reply box in a side panel.']],
+  'h-exp': [['Upcoming Expirations', 'Authorizations, Benefits and Consents within 45 days. Row actions and confirmations follow the designs, including the blocked case message.']],
+  'h-uploads': [['Secure Uploads', 'Upload history with type, description and archive. Uploads land in the Hub as Unattached Uploads, matched to the case.']],
+  'h-facility': [['Manage Facility Account', 'Facility name edits inline. Tabs: Prescribers & users, and Locations, with the same row actions as the Hub.']],
+  'h-profile': [['Profile', 'Profile details edit in a side panel, and password changes in a modal, as in the designs.']],
+  'h-case': [['Case details (portal view)', 'Same header, side panel and tabs pattern as the Hub. Portal tabs from the designs: Case information, Benefits, Notes (read only), Messages, Documents, Dispense history. No internal actions such as status changes or authorization steps.']],
+  'h-patient': [['Patient details', 'Demographics and all of the patient\'s cases at this facility.']],
+  patterns: [['eMax Design Pattern Library', 'Colors, type and every shared component and pattern, live, for both the Hub and the portal.']]
+};
+const _notesPanelH = notesPanel;
+notesPanel = function () {
+  const k = S.route; if (!NOTES_HCP[k] && !(isHCP() && ['intake', 'created'].includes(k))) return _notesPanelH();
+  const items = NOTES_HCP[k] || [['New patient / case', 'Same intake as the Hub, without the internal care team step. Search for the patient first, then the steps from the designs.']];
+  return `<aside style="position:fixed;right:16px;top:60px;z-index:70;width:min(420px,calc(100vw - 32px));max-height:calc(100vh - 80px);overflow:auto" class="card" aria-label="Feedback addressed"><div class="card-h"><h3>${isHCP() ? 'HCP portal: what this screen follows' : 'About this screen'}</h3><button class="iconbtn" data-a="notes" aria-label="Close">${ic('x', 16)}</button></div>
+  <div>${items.map(([n, fix]) => `<div style="padding:10px 16px;border-bottom:1px solid var(--line-2);display:grid;grid-template-columns:18px 1fr;gap:4px 10px"><span style="color:var(--green)">${ic('check', 16)}</span><b style="font:600 13.5px var(--f-head)">${esc(n)}</b><span></span><span style="font-size:13px;color:var(--ink-2)">${esc(fix)}</span></div>`).join('')}</div><div class="card-f muted">Showing ${VERSIONS.find(x => x[0] === S.ver)[1]} · ${VERSIONS.find(x => x[0] === S.ver)[2]}.</div></aside>`;
+};
+
+/* Version switch keeps the app valid; start in the right app */
+const _verH = EXTRA.ver;
+EXTRA.ver = function (t, e) { _verH(t, e); if (!isV3() && isHCP()) { S.app = 'hub'; try { localStorage.setItem('hp-app', 'hub'); } catch (x) { } go('dashboard'); } applyApp(); S.menu = 'acct'; };
+applyApp();
+if (isHCP()) S.route = 'h-dash';
+/* New cases entered in the portal belong to this facility */
+if (EXTRA.iksubmit) { const _iks = EXTRA.iksubmit; EXTRA.iksubmit = function (t, e) { _iks(t, e); if (isHCP() && S.createdId) { const c = byId(S.createdId); if (c && c.facility !== HCP_FAC.name) { c.facility = HCP_FAC.name; if (!PRESCRIBERS.some(p => p[0] === c.prescriber && p[1] === HCP_FAC.name)) c.prescriber = 'Dr. Kasa Mahale'; } } }; }
+const _viewIntakeH = viewIntake;
+viewIntake = function () { const h = _viewIntakeH(); return isHCP() ? h.replace(/data-a="go" data-r="cases">Cases<\/a>/g, 'data-a="go" data-r="h-search">Search Patients</a>') : h; };
+
+/* Focus stack is a mode opened from the Bento board: always a way back, and Dashboard in the nav returns to Bento */
+const _goFocus = go;
+go = function (r) { if (r === 'dashboard' && !isV1() && !isHCP()) S.dash = 'bento'; return _goFocus(r); };
+if (EXTRA.dashset) { const _ds = EXTRA.dashset; EXTRA.dashset = function (t, e) { if (isV1()) return _ds(t, e); S.dash = t.dataset.v; if (S.route !== 'dashboard') go('dashboard'); window.scrollTo(0, 0); }; }
+const _dashFocus0 = dashFocus;
+dashFocus = function () {
+  const h = _dashFocus0(); if (isV1()) return h;
+  return h.replace('<div class="page focuspage">', `<div class="page focuspage"><div class="crumbrow"><div class="crumbs"><a href="#" data-a="dashset" data-v="bento">Dashboard</a>${ic('chevr', 12)}<span>Work one by one</span></div><button class="btn" data-a="dashset" data-v="bento">${ic('chevl', 16)} Back to dashboard</button></div>`);
+};
+/* ================= eMax Design Pattern Library ================= */
+const PL_SECS = [['principles', 'Principles'], ['color', 'Color'], ['type', 'Typography'], ['space', 'Spacing, radius, elevation'], ['buttons', 'Buttons'], ['status', 'Status pills'], ['inputs', 'Form fields'], ['choice', 'Choices'], ['nav', 'Tabs and segments'], ['tables', 'Tables and lists'], ['cards', 'Cards and tiles'], ['panels', 'Side panels'], ['overlays', 'Modals and side panel forms'], ['feedback', 'Feedback and empty states'], ['wizard', 'Steppers and wizards'], ['layouts', 'Page patterns'], ['motion', 'Motion'], ['rules', 'Rules we design against']];
+const PL_HUB = [['Brand', '#3d714e', '--green'], ['Brand dark', '#2c5539', '--green-700'], ['Brand tint', '#eaf3ed', '--green-50'], ['Brand line', '#d3e6d9', '--green-100'], ['Brand gradient start', '#4f8a62', 'gradient'], ['Brand gradient end', '#235333', 'gradient']];
+const PL_HCP = [['Brand', '#3d5571', '--green (blue program)'], ['Brand dark', '#2c3f55', '--green-700'], ['Brand tint', '#eaeef3', '--green-50'], ['Brand line', '#d3dce6', '--green-100'], ['Brand gradient start', '#4f6b8a', 'gradient'], ['Brand gradient end', '#233953', 'gradient']];
+const PL_INK = [['Ink', '#1c3246', '--ink'], ['Ink 2', '#3f5467', '--ink-2'], ['Muted', '#5d7182', '--muted'], ['Faint', '#8a9aa8', '--faint'], ['Line', '#dbe2e7', '--line'], ['Line 2', '#e8edf0', '--line-2'], ['Background', '#eef1f3', '--bg'], ['Surface', '#ffffff', '--surface'], ['Zebra', '#f6f8f9', '--zebra'], ['Link', '#1a6f8a', '--link']];
+const PL_STATUS = [['Success', 't-ok', '#2c6b3f', 'Approved, covered, active, consented'], ['Warning', 't-warn', '#8a5a00', 'Pending anything, waiting on someone'], ['Danger', 't-danger', '#b8412a', 'Denied, expired, overdue, appeal in progress'], ['Info', 't-info', '#1d5a8c', 'Intake, sent, in flight'], ['Navy', 't-navy', '#254059', 'Requested, complete'], ['Violet', 't-violet', '#5b3c78', 'Benefits investigation'], ['Neutral', 't-neutral', '#4a5b69', 'Closed, cancelled, not applicable']];
+const sw = ([n, hex, tok]) => `<div class="plsw"><span class="plchip" style="background:${hex}"></span><div><b>${n}</b><span class="mono">${hex}</span><span class="muted">${tok}</span></div>${copyBtn(hex, n)}</div>`;
+const plSec = (id, title, lead, body) => `<section class="card plsec" id="pl-${id}"><div class="card-h"><h2>${title}</h2></div><div class="card-b"><p class="pllead">${lead}</p>${body}</div></section>`;
+const plEx = (label, html, note = '') => `<div class="plex"><div class="plex-h">${label}</div><div class="plex-b">${html}</div>${note ? `<div class="plex-n">${note}</div>` : ''}</div>`;
+ROUTES_X.patterns = () => {
+  const app = isHCP() ? 'HCP portal' : 'HealthPacer Hub';
+  const on = S.detail.plsec || 'principles';
+  const secs = [
+    plSec('principles', 'Principles', 'One system for two apps. The HealthPacer Hub is where eMAXHealth staff work every case. The HCP portal is where prescribers and their offices follow their patients. Both use the same components, layouts and motion. Only the brand color changes.', `<div class="plgrid3">${[['Work first', 'Lead with what needs doing: overdue, due today, needs a response. Summary counts come second.'], ['Everything is one click away', 'Every count, status and row opens the list or record behind it.'], ['Context stays open', 'Filters, patient details and activity live in side panels that stay open while you work.'], ['Status means one thing', 'Status colors are reserved for meaning, never decoration, and always come with a label.'], ['Short steps', 'Long forms become short steps. Forms open in modals or side panels, never stretched across the page.'], ['Brandable portal', 'The HCP portal takes the program color. Status colors, type and layout never change.']].map(([h, t]) => `<div class="plprin"><b>${h}</b><span>${t}</span></div>`).join('')}</div>`),
+    plSec('color', 'Color', `Brand colors are tokens, so switching the program color re-themes navigation, gradients, panels and primary buttons in one place. You are viewing the <b>${app}</b>.`, `<div class="plcols"><div><h4>HealthPacer Hub · green</h4>${PL_HUB.map(sw).join('')}</div><div><h4>HCP portal · program color (default blue)</h4>${PL_HCP.map(sw).join('')}<p class="muted" style="font-size:12.5px;margin:8px 0 0">Other program colors ready to use: ${HUES.filter(h => h[0] !== 'green').map(h => `<span class="plmini"><i style="background:${h[2]}"></i>${h[1]}</span>`).join(' ')}</p></div></div>
+      <h4>Neutrals</h4><div class="plgrid4">${PL_INK.map(sw).join('')}</div>
+      <h4>Status</h4><div class="plstat">${PL_STATUS.map(([n, t, hex, use]) => `<div><span class="pill ${t}">${n}</span><span class="mono">${hex}</span><span class="muted">${use}</span></div>`).join('')}</div>`),
+    plSec('type', 'Typography', 'Poppins for headings and labels, Roboto for body text, Roboto Mono for IDs. Body text is 14px in dark navy; nothing is smaller than 12px.', `<div class="pltype">${[['Page title', '<h1 style="margin:0">Search Patients</h1>', 'Poppins 600 · 22px'], ['Section title', '<h2 style="margin:0">Authorization requests</h2>', 'Poppins 600 · 16px'], ['Card label', '<div class="section-t" style="margin:0;padding:0;border:0;background:none">Active prescription</div>', 'Poppins 600 · 11px caps · tracking .08em'], ['Body', '<span>Upload the signed and dated prescription.</span>', 'Roboto 400 · 14px · ink'], ['Secondary', '<span class="muted">Waiting on prescriber</span>', 'Roboto 400 · 12.5 to 13px · muted'], ['ID and numbers', '<span class="mono">E100304 · P010284</span>', 'Roboto Mono 500 · tabular numbers']].map(([l, x, spec]) => `<div class="pltr"><span class="muted">${l}</span><div>${x}</div><span class="mono muted" style="font-size:12px">${spec}</span></div>`).join('')}</div>`),
+    plSec('space', 'Spacing, radius, elevation', 'A 4px base. Cards and panels use 16px padding and 16px gaps. Rows are 40px, with 12px vertical padding in lists.', `<div class="plgrid3"><div class="plbox">${[4, 8, 12, 16, 24, 32].map(n => `<div class="plsp"><i style="width:${n * 2}px"></i><span class="mono">${n}px</span></div>`).join('')}</div><div class="plbox">${[['Small', 6], ['Default', 8], ['Card', 12], ['Tile', 20]].map(([l, r]) => `<div class="plrad"><i style="border-radius:${r}px"></i>${l} · <span class="mono">${r}px</span></div>`).join('')}</div><div class="plbox">${[['Card', 'var(--shadow)'], ['Floating tile', '0 18px 40px -28px rgba(20,44,30,.4)'], ['Menu or modal', 'var(--shadow-lg)']].map(([l, s]) => `<div class="plel" style="box-shadow:${s}">${l}</div>`).join('')}</div></div>`),
+    plSec('buttons', 'Buttons', 'One primary action per area. Destructive actions are red and always confirm first.', plEx('Variants', `<button class="btn primary">${ic('plus', 16)} New case</button><button class="btn">${ic('download', 16)} Export</button><button class="btn danger">Deactivate</button><button class="btn ghost">Cancel</button><button class="btn sm">Small</button><button class="btn primary" disabled>Disabled</button><button class="iconbtn" aria-label="More">${ic('more', 16)}</button>`, 'Primary uses the brand color, so it follows the program color in the portal.') + plEx('Split action in a row', splitAct('demo', 'Actions'))),
+    plSec('status', 'Status pills', 'Every status is a pill with a dot and a label. The substatus sits underneath in small text.', plEx('Case status', `${['Intake', 'Requested', 'BI', 'Pending PA Submission', 'Pending Appeal Outcome', 'Active', 'Closed'].map(s => pill(s)).join(' ')}`) + plEx('Coverage and authorization', `${['Covered', 'Approved', 'Denied', 'Drug Not Covered', 'Appeal in Progress', 'Sent to Payer'].map(s => pill(s)).join(' ')}`) + plEx('Status with substatus', `<div style="display:flex;flex-direction:column;gap:2px;align-items:flex-start">${pill('Pending Appeal Submission')}<span class="substat">Waiting on prescriber</span></div>`)),
+    plSec('inputs', 'Form fields', 'Label above the field. Required fields get a red asterisk; optional ones say so. Errors appear under the field and clear as soon as it is fixed. Fields are sized to their content.', `<div class="polgrid" style="max-width:640px">${inp('pl1', 'First name', { req: 1, v: 'Rachel' })}${inp('pl2', 'Middle name', { opt: 1 })}${inp('pl3', 'Date of birth', { type: 'date', req: 1, err: 'Date of birth is required' })}${inp('pl4', 'Dispensing', { opts: ['Dispense as written', 'Substitution allowed'], req: 1 })}${inp('pl5', 'Note', { area: 1, h: 70, span: 1, phText: 'Add context for the team' })}</div>` + plEx('File upload', `<label class="dropzone" style="max-width:520px"><input type="file">${ic('upload', 22)}<span><b>Choose a file</b><br><span class="muted">PDF or image, up to 2 MB</span></span></label>`) + plEx('Search', `<label class="search" style="height:36px;max-width:420px">${ic('search', 16)}<input placeholder="Search by case ID, patient name, date of birth" style="width:100%"></label>`)),
+    plSec('choice', 'Choices', 'Radio cards for decisions with explanations, checkboxes for independent options, switches for settings that save right away.', `<div class="plgrid3"><div class="radio-cards"><label><input type="radio" name="plr" checked><span><b>New prescription</b><br><span class="muted">Enter it like intake</span></span></label><label><input type="radio" name="plr"><span><b>Discontinue</b><br><span class="muted">Stop and record why</span></span></label></div><div>${chk('plc1', 'Highlight this note', true)}${chk('plc2', 'Email the new coordinator', false)}</div><div><label class="setrow"><span><b>Daily summary</b><span class="muted">Email at 7:30 AM</span></span><input type="checkbox" class="switch" checked></label></div></div>`),
+    plSec('nav', 'Tabs and segments', 'Tabs switch sections of one record. Segments switch views of the same data. Counts sit inside both.', plEx('Tabs', `<div class="tabs" role="tablist" style="border-radius:8px">${[['Case information', 1], ['Benefits'], ['Notes', 3], ['Messages', 4]].map(([l, n], i) => `<button role="tab" aria-selected="${i === 0}">${l}${n && i ? ` <span class="n num">${n}</span>` : ''}</button>`).join('')}</div>`) + plEx('Segments', `<div class="seg lite"><button aria-pressed="true">Today <span class="num">7</span></button><button aria-pressed="false">Overdue <span class="num">20</span></button><button aria-pressed="false">No date <span class="num">1</span></button></div>`)),
+    plSec('tables', 'Tables and lists', 'Striped rows, hover highlight on every row, one status per column, and the first column links to the record. Filters live in a side panel, never above the table.', dtable([['Patient', 'auto', c => `<a href="#" class="strong pname">${esc(fullName(c))}</a><span class="sub num">${c.id} · DOB ${fmt(c.dob)}</span>`], ['Follow-up', '130px', c => followCell(c)], ['Case status', '230px', c => `${pill(c.caseStatus)}${c.sub ? `<span class="sub">${esc(c.sub)}</span>` : ''}`], ['Coverage', '150px', c => pill(c.coverage)]], CASES.slice(0, 4)) + pagerX('pldemo', 48, 'cases') + plEx('Feed', `<div class="feed" style="width:100%"><div class="msg hlnote"><span class="avatar">SM</span><div class="hd"><b>Sarah Mitchell</b><span class="pill nodot t-info">Phone log</span><span class="muted num">9/2/2026</span></div><span></span><p><span class="hltext">Highlighted notes use a highlighter background, not red text.</span></p></div></div>`)),
+    plSec('cards', 'Cards and tiles', 'Cards group one topic. Dashboard tiles float, lift on hover and are shortcuts into the work.', `<div class="plgrid3"><section class="btile click"><div class="bt-h"><span>Overdue follow-ups</span>${ic('alert', 16)}</div><div class="bt-big hot num">20</div><div class="muted">Oldest 15 days</div></section><section class="btile b-hero" style="grid-column:auto;grid-row:auto"><div class="bh-date">Hero tile</div><h1 style="font-size:22px">Good afternoon</h1><p>Summarizes what needs doing today.</p></section><section class="card"><div class="card-h"><h3>Card</h3></div><div class="card-b kvp"><div class="fields">${fld('Label', 'Value')}${fld('Phone', '(629) 202-1234')}</div></div></section></div>`),
+    plSec('panels', 'Side panels', 'Filters on the left, context such as Patient or Activity on the right. In layout A they rest behind the page with only the label showing; click to slide the page back. In layout B they dock beside the page. Collapsed bars are fully clickable.', plEx('Behavior by layout', `<div class="plgrid3" style="width:100%">${[['A · Layered cards', 'Panels tucked behind the page, icon and label peek out'], ['B · Panels', 'Panels dock beside the page and push it'], ['C · Left nav', 'Filters sit beside the table; patient panel docks on the right']].map(([h, t]) => `<div class="plprin"><b>${h}</b><span>${t}</span></div>`).join('')}</div>`)),
+    plSec('overlays', 'Modals and side panel forms', 'Short decisions and small forms open in a modal. Editing a section of a record opens a side panel form. Neither ever stretches fields across the full page.', plEx('Try them', `<button class="btn" data-a="modal" data-v="pldemo">Open a modal</button><button class="btn" data-a="edit" data-v="pldemo">Open a side panel form</button><button class="btn" data-a="drawer" data-v="doc" data-id="x">Document viewer</button>`)),
+    plSec('feedback', 'Feedback and empty states', 'Every action confirms with a short toast. Callouts explain rules in context. Empty states say what to do next.', plEx('Toast', `<button class="btn" data-a="toast" data-v="Note saved">Show a toast</button>`) + plEx('Callouts', `<div class="note-banner" style="width:100%">${ic('info', 16)}<span>Changes are recorded in the audit trail with your name.</span></div><div class="note-banner" style="width:100%;background:var(--warn-50);color:var(--warn)">${ic('alert', 16)}<span>Closing stops follow-up reminders.</span></div>`) + plEx('Empty state', `<div class="emptyline" style="width:100%;border:0">No cases found. Try adjusting your filters or search terms.</div>`)),
+    plSec('wizard', 'Steppers and wizards', 'Long forms become short steps. Any step can be opened; required fields only turn red when you come back to a step you left. Small flows inside a modal use a compact stepper.', plEx('Compact stepper', `<ol class="mstepper" style="width:100%"><li class="done"><span>${ic('check', 12)}</span>Action</li><li class="on"><span>2</span>Dosing</li><li><span>3</span>Details</li></ol>`)),
+    plSec('layouts', 'Page patterns', 'Four page types cover almost every screen in both apps.', `<div class="plgrid4">${[['Dashboard', 'Bento tiles: hero, counts, work lists, inbox, expiring soon.'], ['List page', 'Title, primary action, search, filter side panel, chips, striped table, pagination.'], ['Record', 'Header with IDs and copy, status strip, tabs, patient side panel.'], ['Wizard', 'Duplicate check, then short steps with a review page and Fix links.']].map(([h, t]) => `<div class="plprin"><b>${h}</b><span>${t}</span></div>`).join('')}</div>`),
+    plSec('motion', 'Motion', 'Motion explains where things came from and keeps your place. It is short, and it respects reduced motion settings.', `<div class="plgrid3">${[['Side panels', 'Glide open with a spring and a soft ripple on the edge (about 0.6s)'], ['Opening a record', 'Slides up like a page pulled from a file'], ['Wizard steps', 'Move like index cards with the next step peeking out'], ['Menus', 'Pop in from their trigger (0.18s)'], ['Tiles and rows', 'Fade up in sequence when a page loads'], ['Toasts', 'Slide in, leave after 2.6s']].map(([h, t]) => `<div class="plprin"><b>${h}</b><span>${t}</span></div>`).join('')}</div>`),
+    plSec('rules', 'Rules we design against', 'These apply to every new screen in both apps.', `<ul class="plrules">${['No very wide or long fields stretched to fill the page. Forms go in modals, cards or side panels.', 'If a step scrolls too far, split it into more steps.', 'Status colors are reserved for status and always carry a label.', 'Nothing smaller than 12px. Labels are medium weight, not light gray.', 'Every count and status opens the list behind it.', 'Destructive actions confirm first and ask for a reason when it matters.', 'The portal changes only the brand color. Layout, type and status colors stay the same.', 'Sample data only. No real patient data in prototypes.'].map(x => `<li>${ic('check', 14)} ${x}</li>`).join('')}</ul>`)
+  ];
+  return `<div class="page plpage"><div class="pagehead"><div><h1>eMax Design Pattern Library</h1><div class="muted" style="font-size:13px">Colors, type, components and patterns shared by the HealthPacer Hub and the HCP portal. Everything here is live.</div></div><button class="btn" data-a="appswitch">${ic('arrowr', 16)} View in ${isHCP() ? 'the Hub' : 'the HCP portal'}</button></div>
+    <div class="pllayout"><nav class="card setnav" aria-label="Library sections">${PL_SECS.map(([k, l]) => `<button data-a="plgo" data-v="${k}" aria-current="${on === k}">${l}</button>`).join('')}</nav><div class="plbody">${secs.join('')}</div></div></div>`;
+};
+EDITS.pldemo = { title: 'Edit medical details', fields: () => [['a', 'Primary diagnosis', { v: 'Cushing syndrome (E24.9)', req: 1 }], ['b', 'Secondary diagnosis', { v: '', opt: 1 }], ['c', 'Surgery ineligibility', { v: 'Not applicable', opts: ['Not applicable', 'Patient refused surgery'], ph: false }]], save: () => { } };
+const _etPL = editTarget; editTarget = (d) => d.id === 'pldemo' ? {} : _etPL(d);
+const _xmPL = extraModal;
+extraModal = function (m, wrap) {
+  if (m.type === 'pldemo') return wrap('Close this case?', `<p style="margin:0">Modals hold short decisions. A reason is required, and the error clears as soon as you pick one.</p>${inp('plm', 'Reason', { req: 1, opts: ['Duplicate', 'Patient withdrew', 'Other'] })}`, `<button class="btn" data-a="mclose">Cancel</button><button class="btn danger" data-a="mclose">Close case</button>`);
+  return _xmPL(m, wrap);
+};
+const _drawerPL = drawer;
+drawer = function () { const d = S.drawer; if (d && d.type === 'doc' && !d.doc) { d.doc = { name: 'Sample_document.pdf', type: 'Prescription', date: fmt(TODAY), pages: 2 }; } return _drawerPL(); };
+Object.assign(EXTRA, {
+  plgo(t) { S.detail.plsec = t.dataset.v; const el = document.getElementById('pl-' + t.dataset.v); if (el) window.scrollTo({ top: el.getBoundingClientRect().top + scrollY - 76, behavior: 'smooth' }); }
+});
 /* ================= Navigation model ================= */
 const NAV = [
   { g: 'Tools', d: 'Inbound work waiting to be filed or answered', items: [['uploads', 'Unattached Uploads', 'upload', 2, 'Files from providers not yet on a case'], ['comms', 'Communications', 'chat', 3, 'Provider and pharmacy messages'], ['acct', 'Account Requests', 'userplus', 0, 'New portal account approvals'], ['fax', 'Fax Transmissions', 'fax', 259, 'Inbound and outbound fax log', 'hot']] },
@@ -2529,12 +3073,17 @@ const NOTES_MAP = {
   cases: [['Reassign several cases at once', 'Check rows in the Cases table and use Reassign in the bar that appears. Requires a new coordinator and a reason, with an optional handoff note and email.'], ['Shrink the filters', 'About 40 checkboxes are now grouped, collapsible multi-select lists with live counts in a filter panel beside the table.'], ['Too much white space; tighten the rows', 'Rows are 40px with zebra striping. One status per column instead of stacked labels.'], ['Reverse Pending PA and Pending Appeal', 'Case status now runs in workflow order: PA submission, PA outcome, appeal submission, appeal outcome.'], ['Make all the filters multi-select dropdowns', 'Every filter is multi-select with live counts and removable chips.'], ['Filters stay open, maybe on the side', 'Filters dock on the left with a preview panel on the right. In A they tuck behind the page until you open them.']],
   case: [['Reassign case', 'Click Assigned to in the case header, or use the ... menu. Pick the new coordinator and a reason, add a handoff note, and optionally email them.'], ['Status changes need a reason', 'Changing case status opens a modal with reasons specific to that status. Saving without a reason shows an error. Every change lands in the audit trail.'], ['Too much white space', 'Header is one row plus a status strip. Tabs start above the fold. Read-only sections use tight two-column blocks.'], ['Copy to clipboard on demographics', 'Every demographic field and both IDs have a copy button.'], ['Patient demographics visible with other tabs', 'Demographics stay in the Patient side panel on every tab.'], ['Make prescription a tab, with Manage prescription', 'New Prescription tab holds Manage and Triage actions plus history.'], ['Hide header buttons; remove interim drug status, PAP status, pharmacy, active prescription', 'Header keeps only case status, coverage, authorization, follow-up and owner. The rest moved to their tabs.'], ['Authorization request is clunky; make it a linear stepper; up to 3 appeals', 'Authorizations tab is a step-by-step wizard. Each appeal is its own round, with an appeals-used meter (max 3).'], ['Hover highlight on every tab', 'Rows in Documents, Faxes, Notes, Messages, Audit trail and the rest highlight on hover, same as the Cases table.'], ['Notes: highlight means highlight', 'Highlighted notes get a highlighter-pen background on the text, not red text.'], ['Messages: add message at the top', 'The composer sits above the thread, so the newest message and the reply box are together.'], ['Documents, Messages, Audit trail: white space, make them tables', 'Documents, Faxes and Audit trail are compact striped tables. Messages and notes are a tight feed.'], ['Benefits tab white space', 'Plans are a table. BI details and coverage notes sit side by side.']]
 };
+const NOTES_V2 = {
+  dashboard: [['We like the Bento board best', 'Bento board is now the dashboard. The other styles are kept in V1 for reference.'], ['Team workload is for a manager view only', 'Removed from this dashboard. Replaced with Pinned cases. A manager dashboard is planned for a later phase.'], ['The Hub should be green', 'Color themes are hidden in the Hub and kept for the HCP portal, where color depends on the program.']],
+  cases: [['Collapsed filters jump back to the top when opened', 'Fixed. The filter panel keeps its place when you open a group or pick a filter.'], ['Show the substatus with the status', 'The substatus shows under each case status. Values are placeholders until the substatus list is confirmed.']],
+  case: [['Patient ID should link to the patient record', 'Click the Patient ID in the case header to open the patient record.'], ['Link to the current prescription', 'View signed prescription in the Active prescription block, and Active prescription in the case header.'], ['Show status and substatus', 'The substatus shows under the case status in the header. It comes from the reason picked when the status changes.'], ['Manage prescription should match intake', 'Manage starts with New prescription or Discontinue. A new prescription follows the intake dosing and details steps, goes to triage, and the old one moves to history.']]
+};
 function notesPanel() {
   const k0 = PARENT[S.route] && S.route !== 'case' ? PARENT[S.route] : S.route; const key = NOTES_MAP[k0] ? k0 : 'dashboard';
   return `<aside style="position:fixed;right:16px;top:60px;z-index:70;width:min(420px,calc(100vw - 32px));max-height:calc(100vh - 80px);overflow:auto" class="card" aria-label="Client feedback addressed">
   <div class="card-h"><h3>Feedback addressed on this screen</h3><button class="iconbtn" data-a="notes" aria-label="Close">${ic('x', 16)}</button></div>
-  <div>${NOTES_MAP[key].map(([n, fix]) => `<div style="padding:10px 16px;border-bottom:1px solid var(--line-2);display:grid;grid-template-columns:18px 1fr;gap:4px 10px"><span style="color:var(--green)">${ic('check', 16)}</span><b style="font:600 13.5px var(--f-head)">${esc(n)}</b><span></span><span style="font-size:13px;color:var(--ink-2)">${esc(fix)}</span></div>`).join('')}</div>
-  <div class="card-f muted">Also in the feedback, planned for a later phase: Unattached uploads, Communications, Account requests, Fax, Patients, Carriers, Medical facilities and Facility locations cleanup.</div></aside>`;
+  <div>${[...(S.ver !== 'v1' ? (NOTES_V2[key] || []).map(x => ['V2 · ' + x[0], x[1]]) : []), ...NOTES_MAP[key]].map(([n, fix]) => `<div style="padding:10px 16px;border-bottom:1px solid var(--line-2);display:grid;grid-template-columns:18px 1fr;gap:4px 10px"><span style="color:var(--green)">${ic('check', 16)}</span><b style="font:600 13.5px var(--f-head)">${esc(n)}</b><span></span><span style="font-size:13px;color:var(--ink-2)">${esc(fix)}</span></div>`).join('')}</div>
+  <div class="card-f muted">Showing ${VERSIONS.find(x => x[0] === S.ver)[1]} · ${VERSIONS.find(x => x[0] === S.ver)[2]}. Switch versions in the avatar menu.</div></aside>`;
 }
 
 /* ================= Modals / toast ================= */
@@ -2606,7 +3155,10 @@ function render() {
   const MKEY = S.modal ? JSON.stringify([S.modal.type, S.modal.id ?? '', S.modal.step ?? '']) : null, DKEY = S.drawer ? S.drawer.type + S.drawer.id : null;
   const KEEP = {}; document.querySelectorAll('#root .modal [id], #root .drawer [id]').forEach(el => { if (!/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.type === 'file') return; const inModal = !!el.closest('.modal'); if ((inModal && MKEY === LAST_MKEY) || (!inModal && DKEY === LAST_DKEY)) KEEP[el.id] = el.type === 'checkbox' || el.type === 'radio' ? { c: el.checked } : { v: el.value }; });
   const stillModal = MKEY && MKEY === LAST_MKEY; LAST_MKEY = MKEY; LAST_DKEY = DKEY;
+  const SCR = {}, sk = (el) => { const base = el.tagName + '.' + [...el.classList].filter(c => !['closed', 'enter', 'rip-open', 'rip-close'].includes(c)).sort().join('.') + (el.getAttribute('aria-label') || ''); return base; };
+  { const cnt = {}; document.querySelectorAll('#root *').forEach(el => { const b = sk(el); const n = cnt[b] = (cnt[b] ?? -1) + 1; if (el.scrollTop > 0 || el.scrollLeft > 0) SCR[b + '#' + n] = [el.scrollTop, el.scrollLeft]; }); }
   document.getElementById('root').innerHTML = reviewBar() + body + drw + popMenu() + bulkBar() + (S.notesPanel ? notesPanel() : '') + modal().replace('<div class="modal-wrap"', stillModal ? '<div class="modal-wrap still"' : '<div class="modal-wrap"') + (S.toast ? `<div class="toast" role="status">${ic('check', 18)}${esc(S.toast)}</div>` : '');
+  if (Object.keys(SCR).length) { const cnt = {}; document.querySelectorAll('#root *').forEach(el => { const b = sk(el); const n = cnt[b] = (cnt[b] ?? -1) + 1; const v = SCR[b + '#' + n]; if (v) { SCROLL_QUIET = Date.now(); el.scrollTop = v[0]; el.scrollLeft = v[1]; } }); }
   Object.entries(KEEP).forEach(([id, o]) => { const el = document.getElementById(id); if (!el || el.dataset.fresh) return; if ('c' in o) el.checked = o.c; else el.value = o.v; });
   if (fid) { const el = document.getElementById(fid); if (el) { el.focus(); try { if (pos != null) el.setSelectionRange(pos, pos); } catch (e) { } } }
   if (typeof afterRender === 'function') afterRender();
@@ -2702,7 +3254,8 @@ document.addEventListener('input', (e) => {
 document.addEventListener('change', (e) => {
   if (e.target.dataset.in === 'fu') { const c = byId(S.caseId); const [y, m, d] = e.target.value.split('-').map(Number); c.follow = e.target.value ? new Date(y, m - 1, d) : null; toast('Next follow-up date updated'); render(); }
 });
-window.addEventListener('scroll', () => { if (S.pop) { S.pop = null; render(); } }, true);
+let SCROLL_QUIET = 0;
+window.addEventListener('scroll', () => { if (Date.now() - SCROLL_QUIET < 150) return; if (S.pop) { S.pop = null; render(); } }, true);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { S.openMs = null; S.menu = null; S.mega = null; S.pop = null; if (S.modal) S.modal = null; else S.drawer = null; render(); }
   if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) { e.preventDefault(); const el = document.querySelector('.util .search input'); el && el.focus(); }
