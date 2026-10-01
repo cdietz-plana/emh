@@ -2535,7 +2535,7 @@ extraModal = function (m, wrap) {
     ${d.dosing === 'custom' ? `${inp('rxcinstr', 'Dosing instructions', { area: 1, h: 70, req: 1, v: d.cinstr, err: e.cinstr })}<div class="polgrid">${inp('rxcqty', 'Quantity', { req: 1, v: d.cqty, err: e.cqty })}${inp('rxcdays', 'Days supply', { req: 1, v: d.cdays, err: e.cdays })}</div>` : ''}`;
   if (st === 2 && d.mode === 'new') body = `<div class="polgrid">${inp('rxrefills', 'Number of refills', { req: 1, v: d.refills, err: e.refills, phText: '0 to 11' })}${inp('rxwritten', 'Rx written date', { req: 1, type: 'date', v: d.written, err: e.written })}${inp('rxdispense', 'Dispensing', { req: 1, opts: ['Dispense as written', 'Substitution allowed'], v: d.dispense, err: e.dispense })}</div>
     <div class="input ${e.file ? 'err' : ''}"><span class="lbl">Signed prescription <span class="req">*</span></span><div class="ikpanel">${d.file ? `${ic('file', 16)} <b>${esc(d.file)}</b> <span class="muted">184 KB</span><button class="link-btn" data-a="rxfile" data-v="">Remove</button>` : `<span>Upload the signed and dated prescription. PDF or image, up to 2 MB.</span><button class="btn sm" data-a="rxfile" data-v="Rx_signed_${fmt(TODAY).replace(/\//g, '')}.pdf">${ic('upload', 14)} Choose file</button>`}</div>${e.file ? errField('Signed prescription is required') : ''}</div>
-    <div class="note-banner">${ic('info', 16)}<span>Saving sends the new prescription to triage. The current prescription moves to history.</span></div>`;
+    <div class="note-banner">${ic('info', 16)}<span>The new prescription is saved as not triaged. Triage is its own step on the Prescription tab. The current prescription moves to history.</span></div>`;
   if (st === 1 && d.mode === 'stop') body = `${inp('rxstopr', 'Reason', { req: 1, err: e.reason, opts: ['Prescriber stopped therapy', 'Adverse event', 'Patient declined therapy', 'Replaced by a new prescription', 'Other'], v: d.reason })}${inp('rxstopn', 'Note', { area: 1, h: 70, opt: 1, v: d.note })}`;
   const last = st === steps.length - 1;
   return wide(wrap('Manage prescription', head + body, `${st ? `<button class="btn" data-a="rxstep" data-v="-1" style="margin-right:auto">${ic('chevl', 16)} Back</button>` : ''}<button class="btn" data-a="mclose">Cancel</button>${last ? `<button class="btn ${d.mode === 'stop' ? 'danger' : 'primary'}" data-a="rxsave">${d.mode === 'stop' ? 'Discontinue prescription' : `${ic('check', 16)} Save new prescription`}</button>` : `<button class="btn primary" data-a="rxstep" data-v="1">Continue ${ic('chevr', 16)}</button>`}`));
@@ -2560,9 +2560,9 @@ Object.assign(EXTRA, {
     else {
       const o = DOSING.find(x => x.id === d.dosing); const q = d.dosing === 'custom' ? d.cqty : (o.q.match(/\d+/) || ['30'])[0];
       R.hist.unshift({ received: R.cur.received, med: R.cur.med, qty: R.cur.qty, by: c.prescriber, triage: R.cur.triage, file: R.cur.file, note: 'Replaced' });
-      R.cur = { med: 'EMX-300 300 mg tablet', written: usOf(d.written), dosing: d.dosing, directions: d.dosing === 'custom' ? d.cinstr : o.d, qty: q, days: d.dosing === 'custom' ? d.cdays : (o.id === 'opt1' ? '14' : '30'), refillQty: d.dosing === 'opt3' ? '' : '60', refills: d.refills, dispense: d.dispense, file: d.file, received: fmt(TODAY), triage: 'Pending', status: 'Active' };
+      R.cur = { med: 'EMX-300 300 mg tablet', written: usOf(d.written), dosing: d.dosing, directions: d.dosing === 'custom' ? d.cinstr : o.d, qty: q, days: d.dosing === 'custom' ? d.cdays : (o.id === 'opt1' ? '14' : '30'), refillQty: d.dosing === 'opt3' ? '' : '60', refills: d.refills, dispense: d.dispense, file: d.file, received: fmt(TODAY), triage: 'Not triaged', status: 'Active' };
       DOCS.unshift([d.file, 'Prescription', fmt(TODAY), ME, '184 KB', false, true]);
-      auditLog('Prescription', 'New prescription entered', `${R.cur.directions.slice(0, 60)}. Sent to triage`); flash('rx'); toast('New prescription saved and sent to triage');
+      auditLog('Prescription', 'New prescription entered', `${R.cur.directions.slice(0, 60)}. Not triaged yet`); flash('rx'); toast('New prescription saved. Triage it from the Prescription tab when ready');
     }
     S.modal = null; S.rxd = null;
   }
@@ -3287,7 +3287,7 @@ const BRANDMARK = typeof BRANDMARK_SRC !== 'undefined' ? BRANDMARK_SRC : '';
 const _dashBentoV4 = dashBento;
 dashBento = function () { const h = _dashBentoV4(); return isV4() && BRANDMARK ? h.replace('<section class="btile b-hero"', `<section class="btile b-hero brandmark" style="--brandmark:url('${BRANDMARK}')"`) : h; };
 /* ================= V5: customer call, review round 4 ================= */
-VERSIONS.unshift(['v5', 'V5', 'Review round 4', 'Benefits: selectable plans, per-plan benefit investigation and coverage notes, investigation status and auth process']);
+VERSIONS.unshift(['v5', 'V5', 'Review round 4', 'Benefits by plan with investigation status and auth process; create a case from an uploaded document with the document beside the intake; message recipients picked by name. Fixes in every version: view uploads, patient panel scroll, editable gender and language, 7-day links']);
 S.ver = VERSIONS[0][0]; try { const v = localStorage.getItem('hp-ver'); if (v && VERSIONS.some(x => x[0] === v)) S.ver = v; } catch (e) { }
 applyVersion();
 const isV5 = () => vnum() >= 5 && !isHCP();
@@ -3651,12 +3651,400 @@ NOTES_V5.hubusers = [['Links last 7 days', 'Invites, re-invites and password res
 NOTES_V5.fusers = NOTES_V5.hubusers; NOTES_V5.pusers = NOTES_V5.hubusers;
 
 /* ---------- Saved version choice only sticks until a newer version ships ---------- */
-{ const latest = VERSIONS[0][0]; let saved = null, savedLatest = null;
+function verSticky() { const latest = VERSIONS[0][0]; let saved = null, savedLatest = null;
   try { saved = localStorage.getItem('hp-ver'); savedLatest = localStorage.getItem('hp-ver-latest'); } catch (e) { }
   if (saved && saved !== latest && savedLatest !== latest) { S.ver = latest; S.verBumped = true; try { localStorage.setItem('hp-ver', latest); localStorage.setItem('hp-ver-latest', latest); } catch (e) { } applyVersion(); }
   const _v = EXTRA.ver; EXTRA.ver = function (t, e) { _v(t, e); try { localStorage.setItem('hp-ver-latest', latest); } catch (e) { } };
   if (S.verBumped) setTimeout(() => { if (typeof toast === 'function') { const v = VERSIONS[0]; toast(`Showing the newest version, ${v[1]} · ${v[2]}. Earlier versions are in the avatar menu.`); try { render(); } catch (e) { } } }, 600);
 }
+/* ================= V6: Katie review round 5 (Hub) and Portal V2 ================= */
+VERSIONS.unshift(['v6', 'V6', 'Review round 5', 'Each carrier carries its own PBM; Add plan fills phone and fax from carrier and PBM profiles; benefit period set in the benefit investigation; call reference # on coverage notes; prescriber and location come from the facility; the source document stays visible and can be used as the signed form; message subjects from a list; account verification logged as a facility note. Fixes in every version: 2-letter state entry, Other diagnosis shown, new prescriptions are not sent to triage automatically']);
+S.ver = VERSIONS[0][0]; try { const v = localStorage.getItem('hp-ver'); if (v && VERSIONS.some(x => x[0] === v)) S.ver = v; } catch (e) { }
+applyVersion(); applyApp();
+const isV6 = () => vnum() >= 6 && !isHCP();
+
+/* ---------- Portal versions ---------- */
+HCP_VERSIONS.unshift(['p2', 'V2', 'Review round 5', 'Duplicate check limited to your facility, message several team members, upload for a new patient, administrator-only facility edits, shared items only, filters in Hub order']);
+S.hver = 'p2'; try { const v = localStorage.getItem('hp-hver'), L = localStorage.getItem('hp-hver-latest'); if (v && L === HCP_VERSIONS[0][0] && HCP_VERSIONS.some(x => x[0] === v)) S.hver = v; } catch (e) { }
+const isP2 = () => isHCP() && S.hver !== 'p1';
+S.hrole = S.hrole || 'Facility administrator';
+const hAdmin = () => !isP2() || S.hrole === 'Facility administrator';
+
+/* ================= HUB ================= */
+
+/* ---------- State: 2-letter code (all versions) ---------- */
+const ALL_STATES = { AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', DC: 'District of Columbia', FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland', MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri', MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont', VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming', PR: 'Puerto Rico' };
+document.addEventListener('input', (e) => { if (e.target.id === 'ik-state') { const p = e.target.selectionStart; e.target.value = e.target.value.replace(/[^a-z]/gi, '').toUpperCase().slice(0, 2); try { e.target.setSelectionRange(p, p); } catch (x) { } } }, true);
+const _ikMissingV6 = ikMissing;
+ikMissing = function (id) { const out = _ikMissingV6(id); const d = S.ik.d; if (id === 'identity' && d.state && !ALL_STATES[d.state] && !out.some(x => x[0] === 'state')) out.push(['state', 'Use a 2-letter state code, like TN']); return out; };
+
+/* ---------- Intake steps (V6, and the portal in V2) ---------- */
+const intakeV6 = () => isV6() || isP2();
+const facPrescribers = (f) => f ? [...new Set([...f.users.filter(u => u.role === 'Prescriber').map(u => u.name), ...PRESCRIBERS.filter(p => p[1] === f.name).map(p => p[0])])] : [];
+const srcDoc = () => S.ik && S.ik.src && UPLOADS.find(x => x.id === S.ik.src);
+const _ikBodyV6 = ikBody;
+ikBody = function (id) {
+  const d = S.ik.d;
+  if (id === 'prescriber' && intakeV6()) {
+    if (isHCP()) d.facility = HCP_FAC.name; else if (!d.facility && d.prescriber) d.facility = (PRESCRIBERS.find(p => p[0] === d.prescriber) || [])[1] || '';
+    const f = FACILITIES.find(x => x.name === d.facility), pres = facPrescribers(f), locs = f ? f.locs.map(l => `${l.name} · ${l.st}, ${l.city}`) : [];
+    if (d.prescriber && !pres.includes(d.prescriber)) d.prescriber = ''; if (d.location && !locs.includes(d.location)) d.location = '';
+    return `<div class="ikgrid">${isHCP() ? '' : ifield(id, 'facility', 'Medical facility', { span: 's12', req: 1, opts: FACILITIES.map(x => x.name), ph: 'Select the facility first' })}
+      ${f ? `<div class="ikf s12"><div class="ikcard">${ic('building', 18)}<span><b>${esc(f.name)}</b><br><span class="muted">${esc(f.type)} · NPI ${f.npi} · ${f.phone} · ${pres.length} prescribers, ${locs.length} ${locs.length === 1 ? 'location' : 'locations'} on the facility profile</span></span></div></div>` : ''}
+      ${ifield(id, 'prescriber', 'Prescriber', { span: 's6', req: 1, opts: pres, ph: f ? 'Select a prescriber' : 'Select a facility first' })}
+      ${ifield(id, 'location', 'Prescriber location', { span: 's6', req: 1, opts: locs, ph: f ? 'Select a location' : 'Select a facility first' })}
+      ${ifield(id, 'pharmacy', 'Specialty pharmacy', { span: 's6', opt: 1, opts: PHARM_OPTS })}</div>`;
+  }
+  let h = _ikBodyV6(id);
+  if (id === 'identity') { const v = (d.state || '').toUpperCase(); h = h.replace(/<select id="ik-state"[\s\S]*?<\/select>/, `<span class="stwrap"><input id="ik-state" class="stin" data-in="ik" data-k="state" value="${esc(v)}" maxlength="2" placeholder="TN" autocomplete="off" aria-describedby="ik-statename"><span id="ik-statename" class="sthint">${ALL_STATES[v] ? esc(ALL_STATES[v]) : v.length === 2 ? 'Not a state code' : 'Type 2 letters'}</span></span>`); }
+  const u = srcDoc();
+  if (u && intakeV6() && (id === 'consent' || id === 'rx')) {
+    const used = id === 'consent' ? d.consent === 'upload' && d.consentFile === u.file : d.rxfile === u.file;
+    h = (used ? `<div class="descfill on">${ic('check', 16)}<span>Using <b>${esc(u.file)}</b>, the document this case is being created from, as the ${id === 'consent' ? 'signed consent' : 'signed prescription form'}.</span></div>`
+      : `<div class="descfill">${ic('file', 16)}<span>Use <b>${esc(u.file)}</b>, the document this case is being created from, as the ${id === 'consent' ? 'signed consent' : 'signed prescription form'}?</span><button class="btn sm" data-a="ikusedoc" data-k="${id}">Use this document</button></div>`) + h;
+  }
+  return h;
+};
+Object.assign(EXTRA, { ikusedoc(t) { const u = srcDoc(), d = S.ik.d; if (!u) return; if (t.dataset.k === 'consent') { d.consent = 'upload'; d.consentFile = u.file; } else d.rxfile = u.file; toast(`${u.file} attached`); } });
+
+/* Intake policy: carrier plus its PBM (V6) */
+{ const _xm = extraModal; extraModal = function (m, wrap) {
+  let h = _xm(m, wrap); if (m.type !== 'policy' || !h || !intakeV6()) return h;
+  const p = m.id != null && m.id !== '' ? S.ik.policies[+m.id] || {} : {};
+  h = h.replace(/(<select id="pol-carrier">)[\s\S]*?(<\/select>)/, `$1<option value="">Select</option>${CARRIERS.map(x => `<option ${p.carrier === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}$2`)
+    .replace(/<option[^>]*>PBM<\/option>/, '')
+    .replace(/(<div class="input[^"]*"[^>]*><label class="lbl" for="pol-bin">)/, `<div class="input"><label class="lbl" for="pol-pbm">PBM for this plan</label><select id="pol-pbm"><option value="">None</option>${PBMS.map(x => `<option ${p.pbm === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>$1`)
+    .replace('>Rx BIN<', '>PBM BIN<').replace('>Rx PCN<', '>PBM PCN<');
+  return h;
+}; }
+{ const _ps = EXTRA.polsave; EXTRA.polsave = function (t, e) { const pbm = val('pol-pbm'); const n = S.ik.policies.length; _ps(t, e); if (S.modal) return; const i = t.dataset.id !== '' ? +t.dataset.id : n; if (S.ik.policies[i]) S.ik.policies[i].pbm = pbm; }; }
+
+/* Submit: unknown facility prescribers, Other diagnosis, plans with their PBM, source document */
+{ const _iks = EXTRA.iksubmit; EXTRA.iksubmit = function (t, e) {
+  const I = S.ik; const v6 = intakeV6();
+  if (I && I.d.prescriber && !PRESCRIBERS.some(p => p[0] === I.d.prescriber)) PRESCRIBERS.push([I.d.prescriber, I.d.facility || (isHCP() ? HCP_FAC.name : '')]);
+  const pols = I ? I.policies.slice() : [], unins = I && I.d.uninsured, other = I ? I.d.dxOther : '';
+  _iks(t, e);
+  const c = S.createdId && byId(S.createdId); if (!c || S.ik) return;
+  const inf = info(c); if (other) inf.medical.dxo = other;
+  if (v6 && !unins) inf.plans6 = pols.map((p, i) => { const cr = carrierRec(p.carrier), pr = carrierRec(p.pbm);
+    return { order: ['Primary', 'Secondary', 'Tertiary'][i] || 'Additional', name: p.carrier, type: p.type || 'Commercial', member: p.policy, group: p.group, holder: p.holder || `${c.first} ${c.last}`, rel: p.rel || 'Self', holderDob: !p.rel || p.rel === 'Self' ? fmt(c.dob) : '', phone: cr.phone || '', fax: cr.fax || '',
+      pbm: { name: p.pbm || '', phone: pr.phone || '', fax: pr.fax || '' }, bin: p.bin || '', pcn: p.pcn || '', eff: '', cov: 'Pending', auth: 'Incomplete',
+      bi: { method: 'Phone call with payer rep', rep: '', ref: '', tier: '', copay: '', copayType: '$', ded: '', oop: '', pa: 'Unknown', step: 'No', ql: '', date: '', by: '', status: 'Incomplete' }, notes: [],
+      other: i === 0 && pols[1] ? { has: 'Yes', name: pols[1].carrier, note: '' } : { has: 'No', name: '', note: '' } }; });
+}; }
+
+/* ---------- Other diagnosis on Case information (all versions) ---------- */
+const _tabInfoV6 = tabInfo;
+tabInfo = function (c) {
+  const h = _tabInfoV6(c); const m = info(c).medical; const i = h.indexOf('>Secondary diagnosis<'); if (i < 0) return h;
+  const j = h.indexOf('</div>', i) + 6;
+  return h.slice(0, j) + fld('Other diagnosis', m.dxo || 'None', !!m.dxo) + h.slice(j);
+};
+
+/* ---------- Windows opened during intake sit beside the document ---------- */
+const _modalV6 = modal;
+modal = function () { let h = _modalV6(); if (h && S.route === 'intake' && srcDoc() && !S.ik.docHidden) h = h.replace('class="modal-wrap"', 'class="modal-wrap besidedoc"'); return h; };
+
+/* ---------- Benefits: each carrier carries its own PBM (V6) ---------- */
+const carrierRec = (name) => CARRIERS.concat(PBMS).find(x => x.name === name) || {};
+const isPbmPlan = (p) => p.order === 'PBM' || p.order === 'Pharmacy' || p.type === 'PBM';
+function plans6(c) {
+  const I = info(c); if (I.plans6) return I.plans6;
+  const src = I.plans.map((p, i) => planV5(c, p, i)); const carriers = src.filter(p => !isPbmPlan(p)), pb = src.find(isPbmPlan);
+  I.plans6 = carriers.map((p0, i) => { const q = JSON.parse(JSON.stringify(p0)), cr = carrierRec(q.name);
+    q.order = ['Primary', 'Secondary', 'Tertiary'][i] || 'Additional'; q.phone = q.phone || cr.phone || ''; q.fax = q.fax || cr.fax || '';
+    const pbSrc = i === 0 && pb ? pb : null; const [bin, pcn] = ((pbSrc ? pbSrc.bin : q.bin) || '').split(' / ');
+    q.pbm = pbSrc ? { name: pbSrc.name, phone: carrierRec(pbSrc.name).phone || pbSrc.phone, fax: carrierRec(pbSrc.name).fax || pbSrc.fax } : { name: '', phone: '', fax: '' };
+    q.bin = bin || ''; q.pcn = pcn || '';
+    q.other = i === 0 && carriers[1] ? { has: 'Yes', name: carriers[1].name, note: '' } : (i === 0 && I.other ? { ...I.other } : { has: 'No', name: '', note: '' });
+    q.notes = (q.notes || []).map(n => ({ ...n, ref: n.ref || (n.type === 'Phone call' ? I.bi.ref : '') }));
+    return q; });
+  return I.plans6;
+}
+S.planSel6 = S.planSel6 || {};
+const selPlan6 = (c) => { const P = plans6(c); let i = S.planSel6[c.id] ?? 0; if (i >= P.length) i = 0; return [P[i], i]; };
+const period = (p) => { const [f, t] = (p.eff || '').split(' to '); return f ? { f, t } : null; };
+const _tabBenefitsV6 = tabBenefits;
+tabBenefits = function (c) {
+  if (!isV6()) return _tabBenefitsV6(c);
+  const P = plans6(c);
+  if (!P.length) return `${tph('Benefits', `<button class="btn primary" data-a="modal" data-v="plan6">${ic('plus', 16)} Add plan</button>`)}<div class="emptyline">No insurance on file for this case.</div>`;
+  const [p, si] = selPlan6(c), b = p.bi, oc = p.other || { has: 'No', name: '' }, pp = period(p);
+  const table = `<div class="tablewrap"><table class="dt plantable p6"><thead><tr><th style="width:84px">Order</th><th>Carrier</th><th style="width:156px">PBM</th><th style="width:118px">Member ID</th><th style="width:104px">Benefit period</th><th style="width:118px">Investigation status</th><th style="width:106px">Auth process</th><th style="width:104px">Coverage</th><th style="width:40px"></th></tr></thead><tbody>
+    ${P.map((x, i) => { const q = period(x); return `<tr class="click ${i === si ? 'sel' : ''} ${S.flash === 'plan6' + i ? 'flash' : ''}" data-a="plansel6" data-i="${i}" aria-selected="${i === si}">
+      <td><span class="selmark" aria-hidden="true"></span>${esc(x.order)}</td>
+      <td class="wrap"><span class="strong">${esc(x.name)}</span><span class="sub">${esc(x.type)}</span></td>
+      <td class="wrap">${x.pbm && x.pbm.name ? `<span>${esc(x.pbm.name)}</span>${x.bin || x.pcn ? `<span class="sub num">BIN ${esc(x.bin || 'none')} · PCN ${esc(x.pcn || 'none')}</span>` : ''}` : '<span class="muted">None</span>'}</td>
+      <td><span class="mono">${esc(x.member)}</span>${x.group ? `<span class="sub">Group ${esc(x.group)}</span>` : ''}</td>
+      <td>${q ? `<span class="num">${esc(q.f)}</span><span class="sub num">to ${esc(q.t || '')}</span>` : '<span class="muted">From the BI</span>'}</td>
+      <td>${statPill(x.bi.status)}</td><td>${statPill(x.auth)}</td><td>${pill(x.cov || c.coverage)}</td>
+      <td class="r"><button class="iconbtn" data-a="modal" data-v="plan6" data-id="${i}" aria-label="Edit ${esc(x.name)}">${ic('edit', 16)}</button></td></tr>`; }).join('')}</tbody></table></div>`;
+  const notes = p.notes.map((n, i) => `<div class="msg cnote ${n.hl ? 'hlnote' : ''} ${S.flash === 'cnote6' + i ? 'flash' : ''}"><span class="avatar">${n.by.split(' ').map(x => x[0]).join('')}</span>
+    <div class="hd"><b>${esc(n.by)}</b><span class="pill nodot ${n.type === 'Phone call' ? 't-info' : 't-navy'}">${esc(n.type)}</span><span class="muted num">${esc(n.date)}</span></div><span></span>
+    ${n.spoke || n.phone || n.ref ? `<div class="cmeta">${n.spoke ? `<span>${ic('users', 13)} Spoke with <b>${esc(n.spoke)}</b></span>` : ''}${n.phone ? `<span class="num">${ic('phone', 13)} ${esc(n.phone)}</span>` : ''}${n.ref ? `<span class="num">${ic('file', 13)} Call reference # <b>${esc(n.ref)}</b></span>` : ''}</div>` : ''}
+    <p><span class="${n.hl ? 'hltext' : ''}">${esc(n.text)}</span></p>
+    ${n.prov || n.pharm ? `<div class="ctags">${n.prov ? '<span class="pill nodot t-info">Shared with provider</span>' : ''}${n.pharm ? '<span class="pill nodot t-violet">Shared with pharmacy</span>' : ''}</div>` : ''}</div>`).join('');
+  return `${tph('Benefits', `<span class="muted" style="font-size:12.5px">Each carrier carries its own PBM. Select a plan to see its investigation and notes</span><button class="btn" data-a="modal" data-v="plan6">${ic('plus', 16)} Add plan</button>`)}
+  ${table}
+  <div class="plansel-h"><b>${esc(p.name)}</b><span class="muted">${esc(p.order)} · ${esc(p.type)}${p.pbm && p.pbm.name ? ` · PBM ${esc(p.pbm.name)}` : ''}</span></div>
+  <div class="blocks">
+    <div class="block" data-sec="Benefit investigation"><div class="section-t">${ic('card', 15)}Benefit investigation<span class="sp"></span>${statPill(b.status)}<button class="iconbtn" data-a="modal" data-v="bi6" aria-label="Edit benefit investigation">${ic('edit', 16)}</button></div>
+      <div class="fields">${kv('Benefit period', pp ? `<span class="num">${esc(pp.f)} to ${esc(pp.t || '')}</span>` : showV(''))}${kv('Tier', showV(b.tier))}${kv('Copay', b.copay ? `<span class="num">${esc(copayTxt(b))}</span> <span class="muted">${b.copayType === '%' ? 'coinsurance' : 'per fill'}</span>` : showV(''))}${kv('Deductible', showV(b.ded))}${kv('Out of pocket max', showV(b.oop))}${kv('PA required', showV(b.pa))}${kv('Step therapy', showV(b.step))}${kv('Quantity limit', showV(b.ql))}${kv('Reference #', b.ref ? `<span class="mono">${esc(b.ref)}</span>` : showV(''))}${kv('Verified', b.date ? `${esc(b.date)} by ${esc(b.by)}, ${esc(b.method.toLowerCase())}` : showV(''))}</div>
+      <div class="bifoot">${b.status === 'Complete' ? `<span class="muted">${ic('check', 14)} Marked complete ${esc(b.doneDate || '')} by ${esc(b.doneBy || '')}</span><button class="btn sm ghost" data-a="bistatus6" data-v="Incomplete">Reopen investigation</button>` : `<button class="btn primary" data-a="bistatus6" data-v="Complete">${ic('check', 16)} Mark investigation as complete</button>`}</div></div>
+    <div class="block" data-sec="Plan details"><div class="section-t">${ic('shield', 15)}Plan details<span class="sp"></span><button class="iconbtn" data-a="modal" data-v="plan6" data-id="${si}" aria-label="Edit plan">${ic('edit', 16)}</button></div>
+      <div class="fields">${fld('Carrier phone', p.phone || 'None')}${fld('Carrier fax', p.fax || 'None')}${fld('Cardholder', `${p.holder} (${p.rel})`, false)}${fld('Cardholder DOB', p.holderDob || 'Not entered')}</div>
+      <div class="kv-sub">PBM</div><div class="fields">${p.pbm && p.pbm.name ? `${fld('PBM', p.pbm.name, false)}${fld('BIN', p.bin || 'None')}${fld('PCN', p.pcn || 'None')}${fld('PBM phone', p.pbm.phone || 'None')}${fld('PBM fax', p.pbm.fax || 'None')}` : kv('PBM', '<span class="muted">No PBM on this plan</span>')}</div>
+      <div class="kv-sub">Other coverage</div><div class="fields">${kv('Carrier shows other coverage', esc(oc.has))}${kv('Other insurer', oc.has === 'Yes' ? esc(oc.name) : '<span class="muted">None</span>')}${oc.note ? kv('Notes', esc(oc.note)) : ''}</div>
+      <div class="bifoot"><button class="btn sm ghost" data-a="modal" data-v="oc6">${ic('edit', 14)} Edit other coverage</button></div></div>
+    <div class="block full" data-sec="Coverage notes"><div class="section-t">${ic('chat', 15)}Coverage notes<span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">for ${esc(p.name)}</span><span class="sp"></span><button class="btn sm" data-a="modal" data-v="cn6">${ic('plus', 14)} Add coverage note</button></div>
+      <div class="feed" style="margin:0 -16px">${notes || '<div class="emptyline">No coverage notes for this plan yet.</div>'}</div></div>
+  </div>`;
+};
+const _xmV6 = extraModal;
+extraModal = function (m, wrap) {
+  const c = byId(S.caseId), e = m.err || {}, cancel = `<button class="btn" data-a="mclose">Cancel</button>`;
+  if (m.type === 'plan6') { const P = plans6(c), edit = m.id != null && m.id !== '', p = edit ? P[+m.id] : { order: ['Primary', 'Secondary', 'Tertiary'][P.length] || 'Additional', pbm: {}, rel: 'Self', holder: `${c.first} ${c.last}`, holderDob: fmt(c.dob), auth: 'Incomplete' };
+    return wide(wrap(edit ? `Edit plan · ${esc(p.name)}` : 'Add plan', `<div class="kv-sub" style="margin-top:0">Carrier</div><div class="polgrid">${inp('p6order', 'Order', { opts: ['Primary', 'Secondary', 'Tertiary'], ph: false, v: p.order })}${inp('p6car', 'Carrier', { req: 1, err: e.car, opts: CARRIERS.map(x => x.name), v: p.name, help: 'Phone and fax fill in from the carrier profile' })}
+      ${inp('p6type', 'Plan type', { opts: ['Commercial PPO', 'Commercial HMO', 'Commercial', 'Medicare Part D', 'Medicaid'], ph: false, v: p.type })}${inp('p6member', 'Member ID', { req: 1, err: e.member, v: p.member })}${inp('p6group', 'Group', { opt: 1, v: p.group })}${inp('p6auth', 'Auth process', { opts: ['Incomplete', 'Completed'], ph: false, v: p.auth })}
+      ${inp('p6phone', 'Carrier phone', { v: p.phone })}${inp('p6fax', 'Carrier fax', { v: p.fax })}</div>
+      <div class="kv-sub">PBM for this carrier</div><div class="polgrid">${inp('p6pbm', 'PBM', { opts: PBMS.map(x => x.name), ph: 'None', v: (p.pbm || {}).name, help: 'Phone and fax fill in from the PBM profile' })}${inp('p6bin', 'BIN', { v: p.bin, opt: 1 })}${inp('p6pcn', 'PCN', { v: p.pcn, opt: 1 })}${inp('p6pphone', 'PBM phone', { v: (p.pbm || {}).phone })}${inp('p6pfax', 'PBM fax', { v: (p.pbm || {}).fax })}</div>
+      <div class="kv-sub">Cardholder</div><div class="polgrid">${inp('p6holder', 'Cardholder name', { v: p.holder })}${inp('p6rel', 'Relationship to cardholder', { opts: ['Self', 'Spouse', 'Child', 'Other'], ph: false, v: p.rel })}${inp('p6hdob', 'Cardholder DOB', { type: 'date', v: isoOf(p.holderDob || '') })}</div>
+      <div class="note-banner">${ic('info', 16)}<span>The benefit period is entered during the benefit investigation.</span></div>`,
+      `${edit ? `<button class="btn danger" data-a="plan6rm" data-id="${m.id}" style="margin-right:auto">Remove plan</button>` : ''}${cancel}<button class="btn primary" data-a="plan6save" data-id="${edit ? m.id : ''}">${edit ? 'Save plan' : 'Add plan'}</button>`)); }
+  if (m.type === 'bi6') { const [p] = selPlan6(c), b = p.bi; if (!m.init) { m.init = 1; S.bectype = b.copayType; } const ctp = S.bectype, pp = period(p);
+    return wide(wrap(`Edit benefit investigation · ${esc(p.name)}`, `<div class="polgrid">
+      ${inp('bemethod', 'Verified by', { opts: ['Phone call with payer rep', 'Payer portal', 'Electronic (270/271)'], ph: false, v: b.method })}${inp('beref', 'Reference #', { v: b.ref, req: 1, err: e.ref })}
+      ${inp('befrom', 'Benefit period start', { type: 'date', req: 1, err: e.from, v: pp ? isoOf(pp.f) : '' })}${inp('beto', 'Benefit period end', { type: 'date', req: 1, err: e.to, v: pp ? isoOf(pp.t) : '' })}
+      ${inp('berep', 'Rep name', { v: b.rep, opt: 1 })}${inp('betier', 'Tier', { v: b.tier, phText: 'e.g. Specialty (Tier 5)' })}
+      <div class="input span2 ${e.copay ? 'err' : ''}"><label class="lbl" for="becopay">Copay</label><div class="copayrow"><div class="affix"><span class="pre">${ctp === '%' ? '' : '$'}</span><input id="becopay" inputmode="decimal" value="${esc(b.copay)}" placeholder="0"><span class="post">${ctp === '%' ? '%' : ''}</span></div>
+        <div class="segradio" role="radiogroup" aria-label="Copay type"><label><input type="radio" name="bectype" value="$" ${ctp !== '%' ? 'checked' : ''} data-a="bectype"><span>$ Amount</span></label><label><input type="radio" name="bectype" value="%" ${ctp === '%' ? 'checked' : ''} data-a="bectype"><span>% Coinsurance</span></label></div></div>${e.copay ? errField(e.copay) : ''}</div>
+      ${inp('beded', 'Deductible', { v: b.ded })}${inp('beoop', 'Out of pocket max', { v: b.oop })}
+      ${inp('bepa', 'PA required', { v: b.pa, opts: ['Yes', 'No', 'Unknown'], ph: false })}${inp('bestep', 'Step therapy', { v: b.step, opts: ['No', 'Yes, 1 prior agent', 'Yes, 2 prior agents'], ph: false })}
+      ${inp('beql', 'Quantity limit', { v: b.ql })}${inp('becov', 'Coverage outcome', { opts: ['Covered', 'Drug Not Covered', 'Pending', 'Not Applicable'], ph: false, v: p.cov || 'Pending' })}</div>`,
+      `${cancel}<button class="btn primary" data-a="bi6save">Save investigation</button>`)); }
+  if (m.type === 'cn6') { const [p] = selPlan6(c); if (!m.init) { m.init = 1; S.cnd = null; } const d = S.cnd || {}; const call = (d.type || 'Phone call') === 'Phone call';
+    return wide(wrap(`Add coverage note · ${esc(p.name)}`, `${inp('cntxt', 'Note', { area: 1, h: 110, req: 1, err: e.text, v: d.text })}
+      <div class="grid3">${inp('cntype', 'Type', { opts: NOTE_TYPES, ph: false, v: d.type || 'Phone call', req: 1 })}${inp('cnspoke', 'Spoke with', { req: call, opt: !call, err: e.spoke, v: d.spoke ?? '', phText: 'Name and role' })}${inp('cnphone', 'Phone number', { req: call, opt: !call, err: e.phone, v: d.phone ?? p.phone, phText: '(999) 999-9999' })}</div>
+      <div class="grid3">${inp('cnref6', 'Call reference #', { opt: 1, v: d.ref ?? '', phText: 'From the rep or portal' })}</div>
+      <div class="chkrow">${chk('cnhl2', 'Highlight', d.hl)}${chk('cnprov', 'Shared with provider(s)', d.prov)}${chk('cnpharm', 'Shared with pharmacy', d.pharm)}</div>`,
+      `${cancel}<button class="btn primary" data-a="cn6save">Save note</button>`)); }
+  if (m.type === 'oc6') { const [p] = selPlan6(c), o = p.other || {}; return wrap(`Other coverage · ${esc(p.name)}`, `${inp('ocyes', 'Does the carrier show other coverage?', { opts: ['No', 'Yes'], ph: false, v: o.has || 'No' })}${inp('ocname', 'Other insurer', { opts: CARRIERS.map(x => x.name), ph: 'Select', v: o.name })}${inp('ocnote', 'Notes', { area: 1, h: 70, opt: 1, v: o.note || '' })}`, `${cancel}<button class="btn primary" data-a="oc6save">Save</button>`); }
+  if (m.type === 'reqver6') { const r = ACCT.find(x => x.id === m.id); return wrap('Log verification with the office', `<p style="margin:0">Record who confirmed that <b>${esc(r.name)}</b> works at <b>${esc(r.facility)}</b>. It is saved as a facility note with your name and the time.</p>
+      ${inp('rvwho', 'Spoke with', { req: 1, err: e.who, phText: 'Name of the person at the office' })}${inp('rvrole', 'Their role', { opt: 1, phText: 'Office manager, front desk' })}${inp('rvnote', 'What they confirmed', { area: 1, h: 80, opt: 1, phText: 'Confirmed role, email and start date' })}`, `${cancel}<button class="btn primary" data-a="reqver6save" data-id="${r.id}">${ic('check', 16)} Save verification</button>`); }
+  let h = _xmV6(m, wrap);
+  if (isV6() && h && m.type === 'msgnew') h = h.replace(/<div class="input[^"]*"><label class="lbl" for="mnsubj">Subject[\s\S]*?<\/div>/, inp('mnsubj', 'Subject', { req: 1, err: e.subj, opts: MSG_SUBJECTS }))
+    .replace('</button>\n      ', `</button><span class="help">${ic('bell', 13)} Each person is notified in HealthPacer and by email, based on their notification settings.</span>\n      `)
+    .replace('<div class="rcpfoot">', S.rcpStaff ? '<div class="rcpfoot">' : `<div class="rcpmore"><button class="link-btn" data-a="rcpstaff">${ic('plus', 14)} Show eMAXHealth staff (${HUBUSERS.length})</button><span class="muted">Hidden by default so managers are not copied by accident</span></div><div class="rcpfoot">`);
+  if (isV6() && h && m.type === 'msgreply2') { const M = msgMeta(MESSAGES[+m.id]); h = h.replace(/(<\/span><\/div>)/, `$1<div class="muted" style="font-size:12.5px;margin-top:-4px">${ic('users', 13)} Everyone on this message sees your reply: ${esc(M.to.join(', '))}</div>`); }
+  if (isV6() && h && m.type === 'facreq') h = h.replace(/<label class="opt" style="padding:0"><input type="checkbox" id="fnver"[\s\S]*?<\/label>/, `<div class="kv-sub">Verification with the office</div><div class="polgrid">${inp('fnwho', 'Spoke with', { req: 1, err: e.who, phText: 'Name at the office' })}${inp('fnvnote', 'What they confirmed', { opt: 1 })}</div><input type="checkbox" id="fnver" checked hidden>`).replace(/<span class="ikerr">[^<]*<\/span>Confirm you verified the facility first/, '');
+  return h;
+};
+const MSG_SUBJECTS = ['Additional information needed', 'Benefits verification', 'Prior authorization', 'Appeal', 'Prescription', 'Consent', 'Patient assistance (PAP)', 'Shipment', 'Account or access', 'General question'];
+document.addEventListener('change', (e) => {
+  const id = e.target.id;
+  if (id === 'p6car') { const r = carrierRec(e.target.value); ['phone', 'fax'].forEach(k => { const el = document.getElementById('p6' + k); if (el) el.value = r[k] || ''; }); }
+  if (id === 'p6pbm') { const r = carrierRec(e.target.value); const a = document.getElementById('p6pphone'), b = document.getElementById('p6pfax'); if (a) a.value = r.phone || ''; if (b) b.value = r.fax || ''; }
+  if (id === 'cntype' && S.modal && S.modal.type === 'cn6') { S.cnd = { text: val('cntxt'), type: val('cntype'), spoke: val('cnspoke'), phone: val('cnphone'), ref: val('cnref6'), hl: val('cnhl2'), prov: val('cnprov'), pharm: val('cnpharm') }; if (S.modal.err) { delete S.modal.err.spoke; delete S.modal.err.phone; } render(); }
+});
+Object.assign(EXTRA, {
+  plansel6(t) { S.planSel6[S.caseId] = +t.dataset.i; },
+  plan6save(t) {
+    const c = byId(S.caseId), P = plans6(c), err = {};
+    const v = { order: val('p6order'), name: val('p6car'), type: val('p6type'), member: val('p6member'), group: val('p6group'), auth: val('p6auth'), phone: val('p6phone'), fax: val('p6fax'), bin: val('p6bin'), pcn: val('p6pcn'), holder: val('p6holder'), rel: val('p6rel'), holderDob: dateUS(val('p6hdob')), pbm: { name: val('p6pbm'), phone: val('p6pphone'), fax: val('p6pfax') } };
+    if (!v.name) err.car = 'Choose a carrier'; if (!v.member) err.member = 'Enter the member ID'; if (Object.keys(err).length) { S.modal.err = err; return; }
+    let i;
+    if (t.dataset.id !== '') { i = +t.dataset.id; Object.assign(P[i], v); } else { P.push({ ...v, eff: '', cov: 'Pending', bi: { method: 'Phone call with payer rep', rep: '', ref: '', tier: '', copay: '', copayType: '$', ded: '', oop: '', pa: 'Unknown', step: 'No', ql: '', date: '', by: '', status: 'Incomplete' }, notes: [], other: { has: 'No', name: '', note: '' } }); i = P.length - 1; }
+    const ord = ['Primary', 'Secondary', 'Tertiary', 'Additional']; P.sort((a, b) => ord.indexOf(a.order) - ord.indexOf(b.order)); i = P.findIndex(x => x.member === v.member && x.name === v.name);
+    S.planSel6[c.id] = i; auditLog('Benefits', t.dataset.id !== '' ? 'Plan updated' : 'Plan added', `${v.name}${v.pbm.name ? ' with PBM ' + v.pbm.name : ''}`); flash('plan6' + i); S.modal = null; toast(t.dataset.id !== '' ? 'Plan saved' : 'Plan added. Enter the benefit period in the benefit investigation');
+  },
+  plan6rm(t) { const c = byId(S.caseId), P = plans6(c), p = P.splice(+t.dataset.id, 1)[0]; S.planSel6[c.id] = 0; auditLog('Benefits', 'Plan removed', p.name); S.modal = null; toast('Plan removed'); },
+  bi6save() {
+    const c = byId(S.caseId), [p, i] = selPlan6(c), b = p.bi, err = {};
+    const ref = val('beref'), from = val('befrom'), to = val('beto'), copay = val('becopay').replace(/[$%\s]/g, ''), ct = (document.querySelector('input[name=bectype]:checked') || {}).value || '$';
+    if (!ref) err.ref = 'Enter the reference number from the call or portal'; if (!from) err.from = 'Enter the start date'; if (!to) err.to = 'Enter the end date'; if (copay && isNaN(+copay.replace(/,/g, ''))) err.copay = 'Enter a number only';
+    if (Object.keys(err).length) { S.modal.err = err; return; }
+    Object.assign(b, { method: val('bemethod'), ref, rep: val('berep'), tier: val('betier'), copay, copayType: ct, ded: val('beded'), oop: val('beoop'), pa: val('bepa'), step: val('bestep'), ql: val('beql'), date: fmt(TODAY), by: ME });
+    p.eff = `${usOf(from)} to ${usOf(to)}`; p.cov = val('becov'); if (i === 0) c.coverage = p.cov;
+    auditLog('Benefits', 'Benefit investigation updated', `${p.name}: benefit period ${p.eff}, copay ${copayTxt(b) || 'not set'}`); S.modal = null; flash('plan6' + i); toast('Benefit investigation saved');
+  },
+  bistatus6(t) { const c = byId(S.caseId), [p, i] = selPlan6(c), b = p.bi; b.status = t.dataset.v; if (b.status === 'Complete') { b.doneBy = ME; b.doneDate = fmt(TODAY); } auditLog('Benefits', b.status === 'Complete' ? 'Investigation marked complete' : 'Investigation reopened', p.name); flash('plan6' + i); toast(b.status === 'Complete' ? `Investigation complete for ${p.name}` : 'Investigation reopened'); },
+  cn6save() {
+    const c = byId(S.caseId), [p] = selPlan6(c);
+    const n = { date: fmt(TODAY), by: ME, type: val('cntype'), spoke: val('cnspoke'), phone: val('cnphone'), ref: val('cnref6'), text: val('cntxt'), hl: !!val('cnhl2'), prov: !!val('cnprov'), pharm: !!val('cnpharm') }, err = {};
+    if (!n.text) err.text = 'Write the note first'; if (n.type === 'Phone call') { if (!n.spoke) err.spoke = 'Who did you speak with?'; if (!n.phone) err.phone = 'Enter the number you called'; }
+    if (Object.keys(err).length) { S.cnd = n; S.modal.err = err; return; }
+    p.notes.unshift(n); auditLog('Benefits', 'Coverage note added', `${p.name}: ${n.type}${n.ref ? ', ref #' + n.ref : ''}`); S.cnd = null; S.modal = null; flash('cnote60'); toast('Coverage note saved');
+  },
+  oc6save() { const c = byId(S.caseId), [p] = selPlan6(c); p.other = { has: val('ocyes'), name: val('ocyes') === 'Yes' ? val('ocname') : '', note: val('ocnote') }; auditLog('Benefits', 'Other coverage updated', `${p.name}: ${p.other.has === 'Yes' ? p.other.name : 'None'}`); S.modal = null; toast('Other coverage saved'); },
+  rcpstaff() { S.rcpStaff = true; },
+  reqver6save(t) { const r = ACCT.find(x => x.id === t.dataset.id), who = val('rvwho'), role = val('rvrole'), note = val('rvnote'); if (!who) { S.modal.err = { who: 'Who did you speak with?' }; return; }
+    const f = FACILITIES.find(x => x.name === r.facility), when = nowStamp();
+    f.notes.unshift({ by: ME, when, text: `Verified account request for ${r.name} (${r.role}). Spoke with ${who}${role ? ', ' + role : ''}.${note ? ' ' + note : ''}`, hl: false });
+    S.reqLog = S.reqLog || {}; S.reqLog[r.id] = { by: ME, when, who: who + (role ? ', ' + role : '') }; S.reqVerified = r.id; auditLog('Account requests', 'Request verified with the office', `${r.name}: spoke with ${who}`); S.modal = null; toast('Verification saved as a facility note'); }
+});
+{ const _f = EXTRA.facreqsave; EXTRA.facreqsave = function (t, e) { if (!isV6()) return _f(t, e); const who = val('fnwho'), note = val('fnvnote'); if (!who) { S.modal.err = Object.assign({}, S.modal.err, { who: 'Who did you speak with?' }); return; } const n = FACILITIES.length; _f(t, e); if (FACILITIES.length > n) FACILITIES[FACILITIES.length - 1].notes.unshift({ by: ME, when: nowStamp(), text: `Verified new facility request. Spoke with ${who}.${note ? ' ' + note : ''}`, hl: false }); }; }
+/* staff collapsed in the people picker */
+const _msgPeopleV6 = msgPeople;
+msgPeople = function (c) { const P = _msgPeopleV6(c); if (!isV6() || S.rcpStaff) return P; return P.filter(p => p.group !== 'eMAXHealth staff' || (S.rcp && S.rcp.has(p.name))); };
+{ const _xm = extraModal; extraModal = function (m, wrap) { if (m.type === 'msgnew' && !m.init) S.rcpStaff = false; return _xm(m, wrap); }; }
+/* account request banner: logged verification instead of a checkbox */
+const _viewFacilityV6 = viewFacility;
+viewFacility = function () {
+  let h = _viewFacilityV6(); if (!isV6()) return h;
+  const r = S.pendingReq && ACCT.find(x => x.id === S.pendingReq); if (!r) return h; const L = (S.reqLog || {})[r.id];
+  return h.replace(/<label class="opt" style="padding:0"><input type="checkbox" data-a="reqver"[\s\S]*?<\/label>/, L ? `<span class="verstamp">${ic('check', 15)} Verified by ${esc(L.by)} · ${esc(L.when)} · spoke with ${esc(L.who)}</span>` : `<button class="btn" data-a="modal" data-v="reqver6" data-id="${r.id}">${ic('phone', 16)} Log verification</button>`);
+};
+
+/* ---------- Patient page: benefit period, PBM beside the carrier (V6) ---------- */
+const _viewPatientV6 = viewPatient;
+viewPatient = function () {
+  const h = _viewPatientV6(); if (!isV6()) return h;
+  const p = patientOf(S.detail.patient) || PATIENTS[0]; const cases = p.cases.map(byId).filter(Boolean);
+  const rows = cases.flatMap(x => plans6(x).map(pl => ({ x, pl })));
+  const sec = `<section class="card"><div class="card-h"><h2>Coverage</h2><span class="muted" style="font-size:12.5px">Every carrier across this patient's cases</span></div>${dtable([
+    ['Carrier', 'auto', o => `<span class="strong">${esc(o.pl.name)}</span><span class="sub">${esc(o.pl.order)} · ${esc(o.pl.type)}</span>`],
+    ['PBM', '170px', o => o.pl.pbm && o.pl.pbm.name ? `${esc(o.pl.pbm.name)}${o.pl.bin ? `<span class="sub num">BIN ${esc(o.pl.bin)}</span>` : ''}` : '<span class="muted">None</span>'],
+    ['Member ID', '130px', o => `<span class="mono">${esc(o.pl.member)}</span>`],
+    ['Benefit period', '180px', o => o.pl.eff ? `<span class="num">${esc(o.pl.eff)}</span>` : '<span class="muted">Not verified yet</span>'],
+    ['Case', '96px', o => `<a href="#" data-a="case" data-id="${o.x.id}" class="num">${o.x.id}</a>`], ['Outcome', '120px', o => pill(o.pl.cov || o.x.coverage)]], rows, { empty: 'No insurance on file.' })}</section>`;
+  return h.replace(/<section class="card"><div class="card-h"><h2>Coverage<\/h2>[\s\S]*?<\/section>/, sec);
+};
+
+/* ================= PORTAL V2 ================= */
+/* Version list and a role switch for demos */
+{ const _am = acctMenu; acctMenu = function () {
+  let h = _am(); if (!isHCP() || S.menu !== 'acct') return h;
+  h = h.replace(/<div class="dirlist verlist">[\s\S]*?<\/div><hr>/, `<div class="dirlist verlist">${HCP_VERSIONS.map(([k, l, n, d], i) => `<button data-a="hver" data-v="${k}" aria-pressed="${S.hver === k}" title="${esc(d)}"><span class="dl-k">${l}</span><span class="vt">${n}${i === 0 ? ' <em>Latest</em>' : ''}</span>${S.hver === k ? ic('check', 14) : ''}</button>`).join('')}</div><hr>`);
+  if (isP2()) h = h.replace(/(<button data-a="go" data-r="h-profile">)/, `<div class="acct-sub">${ic('users', 16)} Viewing as (demo)</div><div class="dirlist">${['Facility administrator', 'Office staff', 'Prescriber'].map(r => `<button data-a="hrole" data-v="${r}" aria-pressed="${S.hrole === r}">${r}${S.hrole === r ? ic('check', 14) : ''}</button>`).join('')}</div><hr>$1`)
+    .replace(`<span>${esc(HCP_USER.role)} · `, `<span>${esc(S.hrole)} · `);
+  return h; }; }
+Object.assign(EXTRA, {
+  hver(t) { S.hver = t.dataset.v; try { localStorage.setItem('hp-hver', S.hver); localStorage.setItem('hp-hver-latest', HCP_VERSIONS[0][0]); } catch (e) { } S.menu = 'acct'; toast(`Showing portal ${HCP_VERSIONS.find(x => x[0] === S.hver)[1]} · ${HCP_VERSIONS.find(x => x[0] === S.hver)[2]}`); },
+  hrole(t) { S.hrole = t.dataset.v; S.menu = 'acct'; S.hFacEdit = false; toast(`Viewing the portal as ${S.hrole.toLowerCase()}`); }
+});
+
+/* No eMAX wording in the portal */
+const noEmax = (h) => typeof h === 'string' && isP2() ? h.replace(/the eMAXHealth team/g, 'the care team').replace(/The eMAXHealth team/g, 'The care team').replace(/eMAXHealth Patient Services/g, 'Patient Services').replace(/eMAXHealth team/g, 'care team').replace(/to the eMAXHealt\b/g, 'to the care team') : h;
+Object.keys(ROUTES_X).filter(k => k.startsWith('h-')).forEach(k => { const f = ROUTES_X[k]; ROUTES_X[k] = (...a) => noEmax(f(...a)); });
+{ const _d = drawer; drawer = function () { const h = _d(); return isHCP() ? noEmax(h) : h; }; }
+{ const _x = extraModal; extraModal = function (m, w) { const h = _x(m, w); return isHCP() ? noEmax(h) : h; }; }
+{ const _vc = viewCreated; viewCreated = function () { const h = _vc(); return isHCP() ? noEmax(h) : h; }; }
+{ const _t = toast; toast = function (m) { return _t(isHCP() ? noEmax(m) : m); }; }
+
+/* Filters in the Hub's order */
+{ const order = ['st', 'bi', 'cov', 'pap', 'presc', 'loc', 'ship'], orig = HS_F.slice(); const f = ROUTES_X['h-search']; ROUTES_X['h-search'] = (...a) => { const want = isP2() ? orig.slice().sort((x, y) => (order.indexOf(x.key) + 99) % 99 - (order.indexOf(y.key) + 99) % 99) : orig; HS_F.splice(0, HS_F.length, ...want); return f(...a); }; }
+
+/* Upcoming Expirations: board tabs beside the heading */
+{ const f = ROUTES_X['h-exp']; ROUTES_X['h-exp'] = (...a) => { let h = f(...a); if (!isP2()) return h; const m = h.match(/<div class="seg lite">[\s\S]*?<\/div>/); if (!m) return h; h = h.replace(m[0], ''); return h.replace(/(<h1>Upcoming Expirations<\/h1>)/, `<div class="h1row">$1${m[0].replace('seg lite', 'seg lite h1seg')}</div>`); }; }
+
+/* Case: shared notes only, team messages, upload notifies the care team */
+NOTES.forEach((n, i) => { if (n[5] == null) n[5] = i % 2 === 0; });
+{ const f = ROUTES_X['h-case']; ROUTES_X['h-case'] = (...a) => {
+  let h = f(...a); if (!isP2()) return h;
+  if ((S.htab || 'info') === 'notes') { const shared = NOTES.filter(n => n[5]); h = h.replace(/(<div class="feed">)[\s\S]*?(<\/div><\/div><\/div>|$)/, (x) => x); h = h.replace('Shared by the care team. Read only.', 'Shared by the Hub team. Read only.');
+    const i = h.indexOf('<div class="feed">'); if (i > -1) { let depth = 0, j = i; const re = /<\/?div\b/g; re.lastIndex = i; let mm; while ((mm = re.exec(h))) { depth += mm[0] === '<div' ? 1 : -1; if (depth === 0) { j = h.indexOf('>', mm.index) + 1; break; } }
+      h = h.slice(0, i) + `<div class="feed">${shared.map(([w, type, d, t, hl]) => `<div class="msg ${hl ? 'hlnote' : ''}"><span class="avatar">${w.split(' ').map(x => x[0]).join('')}</span><div class="hd"><b>${esc(w)}</b><span class="pill nodot ${type === 'Note' ? 't-navy' : 't-info'}">${type}</span><span class="muted num">${d}</span></div><p><span class="${hl ? 'hltext' : ''}">${esc(t)}</span></p></div>`).join('') || '<div class="emptyline">No notes have been shared with your office yet.</div>'}</div>` + h.slice(j); }
+    h = h.replace(/(<button role="tab"[^>]*data-v="notes">Notes)(<span class="n num">)\d+/, `$1$2${NOTES.filter(n => n[5]).length}`); }
+  if ((S.htab || 'info') === 'messages') h = h.replace(/<div class="composer top[\s\S]*?<div class="feed">/, `<div class="hmsgbar"><button class="btn primary" data-a="modal" data-v="hmsg2" data-id="${(byId(S.caseId) || hcpCases()[0]).id}">${ic('send', 16)} Message the team</button><span class="muted">Choose one or more people on the care team</span></div><div class="feed">`);
+  h = h.replace('<button class="btn" data-a="htab" data-v="messages">', `<button class="btn" data-a="modal" data-v="hmsg2" data-id="${(byId(S.caseId) || hcpCases()[0]).id}">`);
+  return h; }; }
+{ const f = ROUTES_X['h-notif']; ROUTES_X['h-notif'] = (...a) => { const h = f(...a); return isP2() ? h.replace('data-a="modal" data-v="hmsgnew"', 'data-a="modal" data-v="hmsg2"') : h; }; }
+/* Hub side: shared notes show it, and the note window can share */
+{ const _tn = tabNotes; tabNotes = function () { const h = _tn(); let k = 0; return h.replace(/<span class="muted num">([^<]*)<\/span><\/div><button class="iconbtn" data-a="rowmenu" data-v="N:(\d+)"/g, (m, d, i) => NOTES[+i] && NOTES[+i][5] ? `<span class="muted num">${d}</span><span class="pill nodot t-info">Shared with provider</span></div><button class="iconbtn" data-a="rowmenu" data-v="N:${i}"` : m); }; }
+{ const _x = extraModal; extraModal = function (m, w) { let h = _x(m, w); if (h && m.type === 'casenote') { const nt = m.id != null && m.id !== '' ? NOTES[+m.id] : null; h = h.replace('<div class="m-f">', `<div class="m-b" style="padding-top:0">${chk('cnshare', 'Share with the provider portal', nt ? nt[5] : false)}</div><div class="m-f">`); } return h; }; }
+{ const _s = EXTRA.casenotesave; if (_s) EXTRA.casenotesave = function (t, e) { const sh = !!val('cnshare'), n0 = NOTES.length, idx = S.modal && S.modal.id; _s(t, e); if (S.modal) return; if (NOTES.length > n0) NOTES[0][5] = sh; else if (idx != null && idx !== '' && NOTES[+idx]) NOTES[+idx][5] = sh; }; }
+
+/* Message the team: several people, subjects from the Hub list */
+const hTeam = (c) => { const v = pd(c); return [[v.pac, 'Patient access coordinator'], [v.frm, 'Field reimbursement manager'], [v.pa, 'Patient advocate'], [v.cs, 'Clinical specialist']].filter(x => x[0] && x[0] !== 'Unassigned'); };
+{ const _x = extraModal; extraModal = function (m, wrap) {
+  if (m.type !== 'hmsg2') return _x(m, wrap);
+  const e = m.err || {}, cs = hcpCases(); if (!m.init) { m.init = 1; S.hsel = new Set(); S.hcase = m.id || ''; }
+  const c = byId(S.hcase); const team = c ? hTeam(c) : [];
+  return wide(wrap('Message the team', `${m.id ? `<p style="margin:0"><b>${esc(fullName(c))}</b> · <span class="num">${c.id}</span></p>` : inp('hm2case', 'Patient case', { req: 1, err: e.c, opts: cs.map(x => `${x.id} · ${fullName(x)}`), v: c ? `${c.id} · ${fullName(c)}` : '' })}
+    <div class="input ${e.to ? 'err' : ''}"><span class="lbl">To <span class="req">*</span></span>${c ? `<div class="rcpgrid">${team.map(([n, r]) => `<label class="rcp ${S.hsel.has(n) ? 'on' : ''}"><input type="checkbox" data-a="hsel" data-v="${esc(n)}" ${S.hsel.has(n) ? 'checked' : ''}><span><b>${esc(n)}</b><span class="muted">${esc(r)}</span></span></label>`).join('')}</div>` : '<span class="muted" style="font-size:13px">Choose a case to see its care team</span>'}${e.to ? errField('Choose at least one person') : ''}</div>
+    <div class="polgrid">${inp('hm2subj', 'Subject', { req: 1, err: e.s, opts: MSG_SUBJECTS })}${inp('hm2type', 'Type', { opts: ['FYI', 'Action needed'], ph: false })}</div>${inp('hm2body', 'Message', { area: 1, h: 110, req: 1, err: e.b })}`,
+    `<button class="btn" data-a="mclose">Cancel</button><button class="btn primary" data-a="hm2send">${ic('send', 16)} Send message</button>`));
+}; }
+document.addEventListener('change', (e) => { if (e.target.id === 'hm2case' && S.modal && S.modal.type === 'hmsg2') { S.hcase = hId('hm2case'); S.hsel = new Set(); render(); } });
+Object.assign(EXTRA, {
+  hsel(t) { const n = t.dataset.v; S.hsel.has(n) ? S.hsel.delete(n) : S.hsel.add(n); if (S.modal.err) delete S.modal.err.to; },
+  hm2send() { const c = byId(S.hcase), s = val('hm2subj'), b = val('hm2body'), err = {}; if (!c) err.c = 'Choose a case'; if (!S.hsel.size) err.to = 1; if (!s) err.s = 'Choose a subject'; if (!b) err.b = 'Write a message'; if (Object.keys(err).length) { S.modal.err = err; return; }
+    const to = [...S.hsel]; HMSGS.unshift({ id: uid('HM'), c, subj: s, body: b, type: val('hm2type'), from: `${HCP_USER.first} ${HCP_USER.last}`, role: S.hrole, sent: new Date(), by: null, replies: [], answered: true, unread: false, to });
+    MESSAGES.unshift([`${HCP_USER.first} ${HCP_USER.last}`, 'HCP', nowStamp(), b, ['From provider'], { subj: s, type: val('hm2type'), to: to.map(n => `${n} (care team)`), by: '', replies: [], resolved: false }]);
+    S.modal = null; toast(`Message sent to ${to.join(', ')}`); }
+});
+/* Replies reach everyone on the message */
+{ const _d = drawer; drawer = function () { let h = _d(); const d = S.drawer; if (!isP2() || !d || d.type !== 'hmsg') return h; const m = HMSGS.find(x => x.id === d.id); const who = [m.from, ...(m.to || [])].filter((x, i, a) => a.indexOf(x) === i);
+  return h.replace(/(<label class="lbl" for="hreply">)Reply to [^<]*/, `$1Reply`).replace(/placeholder="Write a reply\.[^"]*"/, `placeholder="Write a reply"`).replace('<div class="thread">', `<div class="muted" style="font-size:12.5px">${ic('users', 13)} Everyone on this message sees replies: ${esc(who.join(', '))}, and your office</div><div class="thread">`); }; }
+
+/* Uploads: from the case, or for a new patient with no case yet */
+const HUP_TYPES2 = ['New patient enrollment', 'Prescription', 'Insurance card', 'Lab results', 'Clinical notes', 'Prior authorization form', 'Appeal or letter of medical necessity', 'Other'];
+{ const _x = extraModal; extraModal = function (m, wrap) {
+  if (m.type !== 'hupnew' || !isP2()) return _x(m, wrap);
+  const e = m.err || {}, cs = hcpCases(); if (!m.init) { m.init = 1; S.hupFor = m.id ? 'case' : (S.hupFor || 'case'); }
+  const forCase = S.hupFor === 'case' || m.id;
+  return wrap('Upload document', `${m.id ? `<p style="margin:0">To case <b class="num">${m.id}</b> · ${esc(fullName(byId(m.id)))}</p>` : `<div class="seg lite">${[['case', 'For an existing case'], ['new', 'New patient, no case yet']].map(([k, l]) => `<button data-a="hupfor" data-v="${k}" aria-pressed="${S.hupFor === k}">${l}</button>`).join('')}</div>
+    ${forCase ? inp('hupcase', 'Patient case', { req: 1, err: e.c, opts: cs.map(c => `${c.id} · ${fullName(c)}`) }) : `<div class="polgrid">${inp('hupfirst', 'Patient first name', { req: 1, err: e.f1 })}${inp('huplast', 'Patient last name', { req: 1, err: e.l1 })}${inp('hupdob', 'Date of birth', { type: 'date', req: 1, err: e.dob })}</div>`}`}
+    ${inp('huptype', 'Type', { req: 1, err: e.t, opts: HUP_TYPES2, v: forCase ? '' : 'New patient enrollment' })}
+    <label class="dropzone ${e.f ? 'err' : ''}"><input type="file" id="docfile">${ic('upload', 22)}<span><b>${S.pickName ? esc(S.pickName) : 'Choose a file'}</b><br><span class="muted">PDF or image, up to 2 MB</span></span></label>${e.f ? errField('Choose a file to upload') : ''}
+    ${inp('hupdesc', 'Description or instructions', { area: 1, h: 80, req: 1, err: e.d, phText: 'What is this and what should the team do with it?' })}
+    <div class="muted" style="font-size:12.5px">${ic('bell', 13)} The care team is notified when you upload.</div>`, `<button class="btn" data-a="mclose">Cancel</button><button class="btn primary" data-a="hupsave">${ic('upload', 16)} Upload</button>`);
+}; }
+Object.assign(EXTRA, { hupfor(t) { S.hupFor = t.dataset.v; if (S.modal) S.modal.err = null; } });
+{ const _s = EXTRA.hupsave; EXTRA.hupsave = function (t, e) {
+  if (!isP2()) return _s(t, e);
+  const caseId = S.modal.id;
+  if (!caseId && S.hupFor === 'new') { const f1 = val('hupfirst'), l1 = val('huplast'), dob = val('hupdob'), ty = val('huptype'), d = val('hupdesc'), err = {};
+    if (!f1) err.f1 = 'Required'; if (!l1) err.l1 = 'Required'; if (!dob) err.dob = 'Required'; if (!ty) err.t = 'Choose a type'; if (!S.pickName) err.f = 1; if (!d) err.d = 'Add a short description'; if (Object.keys(err).length) { S.modal.err = err; return; }
+    const pc = { first: f1, last: l1, mi: '', id: 'No case yet', dob: new Date(dob + 'T12:00'), pid: '' };
+    HUPS.unshift({ id: uid('HU'), c: pc, type: ty, file: S.pickName, size: '240 KB', desc: d, by: `${HCP_USER.first} ${HCP_USER.last}`, date: new Date(), archived: false });
+    UPLOADS.unshift({ id: uid('U'), facility: HCP_FAC.name, type: ty === 'New patient enrollment' ? 'Enrollment form' : ty, file: S.pickName, size: '240 KB', desc: `${d} (new patient ${f1} ${l1}, DOB ${usOf(dob)})`, by: `${HCP_USER.first} ${HCP_USER.last}`, byOrg: HCP_FAC.name, date: new Date(), assigned: null, hint: null, newPt: true, pt: { first: f1, last: l1, dob: usOf(dob) } });
+    S.modal = null; S.pickName = null; toast('Uploaded. The care team is notified and will open a case'); return; }
+  if (caseId) { const el = document.getElementById('hupcase'); }
+  const n = HUPS.length; if (caseId && !document.getElementById('hupcase')) { const fake = document.createElement('input'); fake.id = 'hupcase'; fake.value = `${caseId} · x`; fake.hidden = true; document.body.appendChild(fake); _s(t, e); fake.remove(); } else _s(t, e);
+  if (!S.modal && HUPS.length > n) toast('Uploaded to the case. The care team is notified');
+}; }
+{ const _dd = docData; docData = function (u) { const d = _dd(u); if (u.pt) Object.assign(d, { first: u.pt.first, mi: '', last: u.pt.last, dob: u.pt.dob, email: '', phone: '', alt: '', alts: '' }); return d; }; }
+
+/* Manage Facility Account: administrators only; everyone edits their own profile */
+{ const f = ROUTES_X['h-facility']; ROUTES_X['h-facility'] = (...a) => { let h = f(...a); if (hAdmin()) return h;
+  h = h.replace(/<button class="btn primary" data-a="modal" data-v="(husernew|locnew)">[\s\S]*?<\/button>/g, '').replace(/<div class="split-btn">[\s\S]*?<\/div>/g, '').replace(/<button[^>]*data-a="hfacedit"[^>]*>[\s\S]*?<\/button>/g, '');
+  return h.replace('<div class="caselayout side-left">', `<div class="note-banner" style="margin-bottom:12px">${ic('info', 16)}<span>Only facility administrators can edit the facility details and add or remove users. You can edit your own details from <a href="#" data-a="go" data-r="h-profile">My profile</a>.</span></div><div class="caselayout side-left">`); }; }
+
+/* Duplicate check: only this facility's cases; an open case elsewhere blocks a new case */
+{ const _s = EXTRA.iksearch; EXTRA.iksearch = function (t, e) { _s(t, e); if (!isP2() || !S.ik) return; const s = S.ik.search; if (!s.done) return;
+  const all = CASES.filter(c => c.last.toLowerCase() === s.last.trim().toLowerCase() && (c.first.toLowerCase() === s.first.trim().toLowerCase() || fmt(c.dob) === s.dob.trim()));
+  const elsewhere = all.filter(c => c.facility !== HCP_FAC.name), openElse = elsewhere.filter(c => !['Closed', 'Complete'].includes(c.caseStatus));
+  s.dups = s.dups.filter(c => c.facility === HCP_FAC.name); S.ik.block = openElse.length > 0; S.ik.closedElse = !openElse.length && elsewhere.length > 0;
+  S.ik.choice = S.ik.block ? null : s.dups.length ? null : 'new'; }; }
+const _ikSearchP2 = ikSearch;
+ikSearch = function () { let h = _ikSearchP2(); if (!isP2() || !S.ik || !S.ik.search.done) return h;
+  if (S.ik.block) return h.replace(/<h2 class="iksecthead">[\s\S]*?(<div class="ikfoot|<div class="iksfoot|$)/, `<div class="blockmsg">${ic('alert', 20)}<div><b>This patient has an open case with another provider</b><span>A new case cannot be entered until that case is closed. Contact the care team at 1-555-867-5309.</span></div></div>$1`).replace(/<button class="btn primary"[^>]*data-a="ikstart"[^>]*>/, (m) => m.replace('<button', '<button disabled'));
+  if (S.ik.closedElse) h = h.replace(/(<h2 class="iksecthead">)/, `<div class="note-banner" style="margin-bottom:10px">${ic('info', 16)}<span>This patient had a closed case with another provider. You can enter a new case. You will only see cases at ${esc(HCP_FAC.name)}.</span></div>$1`);
+  return h; };
+{ const _st = EXTRA.ikstart; EXTRA.ikstart = function (t, e) { if (isP2() && S.ik && S.ik.block) { toast('Contact the care team before entering a new case'); return; } return _st(t, e); }; }
+
+/* Portal benefits: benefit period and PBM beside the carrier */
+{ const f = ROUTES_X['h-case']; ROUTES_X['h-case'] = (...a) => { let h = f(...a); if (!isP2() || (S.htab || 'info') !== 'benefits') return h; const c = byId(S.caseId) || hcpCases()[0]; const P = plans6(c);
+  return h.replace(/<div class="tablewrap"><table class="dt"><thead><tr><th>Order<\/th>[\s\S]*?<\/table><\/div>/, `<div class="tablewrap"><table class="dt"><thead><tr><th>Order</th><th>Carrier</th><th>PBM</th><th>Member ID</th><th>BIN / PCN</th><th>Benefit period</th><th>Outcome</th></tr></thead><tbody>${P.map(p => `<tr><td>${esc(p.order)}</td><td><span class="strong">${esc(p.name)}</span><span class="sub">${esc(p.type)}</span></td><td>${p.pbm && p.pbm.name ? esc(p.pbm.name) : '<span class="muted">None</span>'}</td><td class="mono">${esc(p.member)}</td><td class="num">${esc([p.bin, p.pcn].filter(Boolean).join(' / ') || 'None')}</td><td class="num">${p.eff ? esc(p.eff) : '<span class="muted">Not verified yet</span>'}</td><td>${pill(p.cov || c.coverage)}</td></tr>`).join('')}</tbody></table></div>`); }; }
+
+/* ---------- Feedback panel ---------- */
+const NOTES_V6 = {
+  case: [['Each carrier carries its PBM', 'Benefits lists carriers only. Each plan holds its PBM (name, BIN, PCN, phone, fax) and its own Other coverage.'], ['Add plan fills phone and fax', 'Choosing the carrier and PBM fills their phone and fax from their profiles. Benefit period is entered in the benefit investigation.'], ['Call reference # on coverage notes', 'Add coverage note has a Call reference # field.'], ['Message subjects from a list', 'Subject is a dropdown, staff are hidden until you choose to show them, and replies go to everyone on the message.'], ['Triage is its own step', 'A new prescription is saved as not triaged.']],
+  intake: [['2-letter state', 'Type TN for Tennessee.'], ['Facility first', 'Prescriber and location come from the chosen facility\'s profile.'], ['Use the source document', 'When creating from a document, Consent and Prescription details offer to use it as the signed form. Windows such as Add policy sit beside the document.']],
+  patients: [['Benefit period and PBM', 'Coverage shows Benefit period, with the PBM as a column beside the carrier.']],
+  facilities: [['Verification note', 'Log verification records who you spoke with and saves it as a facility note with your name and the time.']]
+};
+Object.assign(NOTES_HCP, {
+  'h-search': (NOTES_HCP['h-search'] || []).concat([['V2 · Filters in the Hub\'s order', 'Case status, authorization, coverage, PAP, then prescriber and location. The panel scrolls.']]),
+  'h-case': (NOTES_HCP['h-case'] || []).concat([['V2 · Shared items only', 'Notes appear only when the care team shares them. Message the team lets you choose several people. Upload document notifies the care team.']]),
+  'h-uploads': (NOTES_HCP['h-uploads'] || []).concat([['V2 · New patient uploads', 'Upload for an existing case, or for a new patient by entering their name and date of birth.']]),
+  'h-facility': (NOTES_HCP['h-facility'] || []).concat([['V2 · Administrators only', 'Use Viewing as in the avatar menu to see the office staff and prescriber view.']]),
+  'h-exp': (NOTES_HCP['h-exp'] || []).concat([['V2 · Tabs beside the heading', 'Authorizations, Benefits and Consents sit next to the title.']])
+});
+
+verSticky(); applyApp();
 /* ================= Navigation model ================= */
 const NAV = [
   { g: 'Tools', d: 'Inbound work waiting to be filed or answered', items: [['uploads', 'Unattached Uploads', 'upload', 2, 'Files from providers not yet on a case'], ['comms', 'Communications', 'chat', 3, 'Provider and pharmacy messages'], ['acct', 'Account Requests', 'userplus', 0, 'New portal account approvals'], ['fax', 'Fax Transmissions', 'fax', 259, 'Inbound and outbound fax log', 'hot']] },
@@ -3740,7 +4128,7 @@ function notesPanel() {
   const k0 = PARENT[S.route] && S.route !== 'case' ? PARENT[S.route] : S.route; const key = NOTES_MAP[k0] ? k0 : 'dashboard';
   return `<aside style="position:fixed;right:16px;top:60px;z-index:70;width:min(420px,calc(100vw - 32px));max-height:calc(100vh - 80px);overflow:auto" class="card" aria-label="Client feedback addressed">
   <div class="card-h"><h3>Feedback addressed on this screen</h3><button class="iconbtn" data-a="notes" aria-label="Close">${ic('x', 16)}</button></div>
-  <div>${[...(parseInt(S.ver.slice(1)) >= 5 ? (NOTES_V5[key] || []).map(x => ['V5 · ' + x[0], x[1]]) : []), ...(parseInt(S.ver.slice(1)) >= 4 ? (NOTES_V4[key] || []).map(x => ['V4 · ' + x[0], x[1]]) : []), ...(S.ver !== 'v1' ? (NOTES_V2[key] || []).map(x => ['V2 · ' + x[0], x[1]]) : []), ...NOTES_MAP[key]].map(([n, fix]) => `<div style="padding:10px 16px;border-bottom:1px solid var(--line-2);display:grid;grid-template-columns:18px 1fr;gap:4px 10px"><span style="color:var(--green)">${ic('check', 16)}</span><b style="font:600 13.5px var(--f-head)">${esc(n)}</b><span></span><span style="font-size:13px;color:var(--ink-2)">${esc(fix)}</span></div>`).join('')}</div>
+  <div>${[...(parseInt(S.ver.slice(1)) >= 6 ? (NOTES_V6[key] || []).map(x => ['V6 · ' + x[0], x[1]]) : []), ...(parseInt(S.ver.slice(1)) >= 5 ? (NOTES_V5[key] || []).map(x => ['V5 · ' + x[0], x[1]]) : []), ...(parseInt(S.ver.slice(1)) >= 4 ? (NOTES_V4[key] || []).map(x => ['V4 · ' + x[0], x[1]]) : []), ...(S.ver !== 'v1' ? (NOTES_V2[key] || []).map(x => ['V2 · ' + x[0], x[1]]) : []), ...NOTES_MAP[key]].map(([n, fix]) => `<div style="padding:10px 16px;border-bottom:1px solid var(--line-2);display:grid;grid-template-columns:18px 1fr;gap:4px 10px"><span style="color:var(--green)">${ic('check', 16)}</span><b style="font:600 13.5px var(--f-head)">${esc(n)}</b><span></span><span style="font-size:13px;color:var(--ink-2)">${esc(fix)}</span></div>`).join('')}</div>
   <div class="card-f muted">Showing ${VERSIONS.find(x => x[0] === S.ver)[1]} · ${VERSIONS.find(x => x[0] === S.ver)[2]}. Switch versions in the avatar menu.</div></aside>`;
 }
 
