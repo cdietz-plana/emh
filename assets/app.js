@@ -4044,6 +4044,379 @@ Object.assign(NOTES_HCP, {
   'h-exp': (NOTES_HCP['h-exp'] || []).concat([['V2 · Tabs beside the heading', 'Authorizations, Benefits and Consents sit next to the title.']])
 });
 
+/* ================= V7: authorization flow, review round 6 ================= */
+VERSIONS.unshift(['v7', 'V7', 'Review round 6', 'Authorization requests rebuilt around your process: choose the medication, edit and save the prefilled form, fax it to the HCP with a cover sheet you can preview and edit, upload the signed form, fax it to the carrier or PBM with documents in your order, record additional information requests, then complete the request as approved (authorization number and dates) or denied (reason). Every send can be resent, and a denial can be appealed through the same steps']);
+S.ver = VERSIONS[0][0]; try { const v = localStorage.getItem('hp-ver'); if (v && VERSIONS.some(x => x[0] === v)) S.ver = v; } catch (e) { }
+applyVersion(); applyApp();
+const isV7 = () => vnum() >= 7 && !isHCP();
+Object.assign(TONE, { 'In progress': 't-info', 'Completed': 't-ok', 'Additional info requested': 't-warn', 'Awaiting outcome': 't-warn' });
+
+/* ---------- Model ---------- */
+const STEPS7 = ['Edit form', 'Review and save', 'Send to HCP', 'Signed form back', 'Send to carrier or PBM', 'Outcome'];
+const COVERS = ['eMax Signature Request', 'eMax PA Cover Sheet', 'eMax Appeal Attestation', 'eMax Additional Information Request', 'Carrier PA Fax Cover'];
+const AUTH7 = {};
+let SEQ7 = 0; const sq = () => ++SEQ7;
+const send7 = (when, by, to, num, cover, docs, note) => ({ when, by, to, num, cover, docs, note: note || '', seq: sq() });
+function seed7(c) {
+  const old = arStore(c).cur, P = plans6(c), plan = P[0] || { name: c.payer, pbm: {} };
+  const st = { reqs: [] }; AUTH7[c.id] = st; if (!old) return st;
+  const pf = info(c).presc, carrierFax = (carrierRec(plan.name).fax || '1 (800) 555-0141');
+  const req = { id: old.id, type: old.type, med: old.med, plan: plan.name, pbm: (plan.pbm || {}).name || '', created: old.created, by: 'Marketta Howie', rounds: [], last: null, open: true };
+  old.rounds.forEach(o => {
+    const pa = o.kind === 'pa'; const d = o.dates || []; const lbl = pa ? 'PA' : `Appeal${o.n}`;
+    const step = o.outcome ? 6 : pa ? [0, 0, 2, 3, 4, 5, 5][o.stage] : [0, 3, 4, 5, 5][o.stage];
+    const r = { kind: o.kind, n: o.n || 0, step: Math.min(step, 5), form: null, formFile: null, hcp: [], signed: null, carrier: [], addl: [], awaitingAddl: false, outcome: null };
+    const file = `${lbl}_form_${plan.name.split(' ')[0]}.pdf`;
+    if (step >= 2) { r.form = {}; r.formFile = file; r.formSeq = sq(); }
+    if (step >= 3) r.hcp.push(send7(d[1] || d[0] || req.created, 'Janet Mills', `${c.prescriber}, ${c.facility}`, pf.fax, pa ? 'eMax Signature Request' : 'eMax Appeal Attestation', [file]));
+    if (step >= 4) { r.signed = o.file || `${lbl}_signed.pdf`; r.signedSeq = sq(); }
+    if (step >= 5) r.carrier.push(send7(d[4] || d[2] || d[d.length - 1] || req.created, 'Janet Mills', `${plan.name} PA fax`, carrierFax, 'eMax PA Cover Sheet', [r.signed, 'Chart_notes_2026.pdf']));
+    if (o.outcome === 'Denied') r.outcome = { result: 'Denied', reason: o.reason || 'Not documented', when: d[d.length - 1] || '', by: 'Janet Mills' };
+    if (o.outcome === 'Approved') r.outcome = { result: 'Approved', num: 'PA-' + c.id.slice(-4) + '7', eff: fmt(addDays(TODAY, -30)), exp: fmt(addDays(TODAY, 335)), when: d[d.length - 1] || fmt(addDays(TODAY, -30)), by: 'Janet Mills' };
+    if (r.outcome) r.outcome.seq = sq();
+    req.rounds.push(r);
+  });
+  const last = req.rounds[req.rounds.length - 1]; if (last.outcome && last.outcome.result === 'Approved') req.open = false;
+  req.last = { by: 'Janet Mills', when: (last.carrier[0] || last.hcp[0] || { when: req.created }).when };
+  st.reqs.push(req); return st;
+}
+const auth7 = (c) => AUTH7[c.id] || seed7(c);
+const rd7 = (req) => req.rounds[req.rounds.length - 1];
+const roundName = (r) => r.kind === 'pa' ? 'Prior authorization' : `Appeal ${r.n} of 3`;
+function reqStatus(req) { const r = rd7(req); if (r.outcome) return r.outcome.result === 'Approved' || req.rounds.filter(x => x.kind === 'appeal').length >= 3 ? 'Completed' : 'Completed'; return 'In progress'; }
+function outStatus(req) { const r = rd7(req); if (r.outcome) return r.outcome.result; if (r.awaitingAddl) return 'Additional info requested'; return r.step >= 5 ? 'Awaiting outcome' : 'Pending'; }
+function touch(c, req, what) { req.last = { by: ME, when: nowStamp() }; auditLog('Authorization', what, `${req.id} · ${roundName(rd7(req))}`); sync7(c, req); }
+function sync7(c, req) {
+  const r = rd7(req), pa = r.kind === 'pa';
+  if (r.outcome) { if (r.outcome.result === 'Approved') { c.ar = 'Complete'; c.coverage = 'Approved'; c.caseStatus = 'Active'; } else { c.ar = pa ? 'Active' : 'Appeal in Progress'; c.coverage = 'Denied'; c.caseStatus = 'Pending Appeal Submission'; } return; }
+  c.ar = pa ? (r.step >= 5 ? 'Sent to Payer' : r.step === 4 ? 'Payer Transmission Pending' : r.step === 3 ? 'Sent to HCP' : r.step === 2 ? 'HCP Transmission Pending' : 'Active') : 'Appeal in Progress';
+  c.caseStatus = pa ? (r.step >= 5 ? 'Pending PA Outcome' : 'Pending PA Submission') : (r.step >= 5 ? 'Pending Appeal Outcome' : 'Pending Appeal Submission');
+  if (!pa) c.coverage = 'Denied';
+}
+const _arLabelV7 = arLabel;
+arLabel = function (c) { if (!isV7()) return _arLabelV7(c); const reqs = auth7(c).reqs; if (!reqs.length) return 'Not started'; const req = reqs[reqs.length - 1], r = rd7(req);
+  if (r.outcome) return r.outcome.result === 'Approved' ? 'Approved' : `${roundName(r)} denied`; return `${r.kind === 'pa' ? 'PA' : `Appeal ${r.n} of 3`} · ${r.awaitingAddl ? 'additional info requested' : STEPS7[r.step].toLowerCase()}`; };
+
+/* ---------- Documents and the form ---------- */
+const caseDocs7 = () => DOCS.map(d => d[0]);
+function formData(c, req, r) {
+  const P = plans6(c), p = P.find(x => x.name === req.plan) || P[0] || { pbm: {} }, pr = info(c).presc, R = rxOf(c), m = info(c).medical;
+  const prev = req.rounds[req.rounds.indexOf(r) - 1];
+  return Object.assign({ patient: fullName(c), dob: fmt(c.dob), member: p.member || '', plan: req.plan, pbm: (p.pbm || {}).name || '', binpcn: [p.bin, p.pcn].filter(Boolean).join(' / '),
+    prescriber: c.prescriber, npi: pr.npi, pphone: pr.phone, pfax: pr.fax, drug: req.med, sig: R.cur.directions, qty: `${R.cur.qty} · ${R.cur.days} days`, dx: m.dx, dx2: m.dx2 || '',
+    prior: m.other || 'Ketoconazole, stopped 6/2026', rationale: 'Patient has persistent hypercortisolism after surgery. Requesting EMX-300 per current guidelines.', labs: 'UFC 212 µg/24h (3 times normal), late night salivary cortisol elevated.',
+    denial: prev && prev.outcome ? prev.outcome.reason : '', appeal: r.kind === 'appeal' ? 'Please reconsider. The attached labs document the medical necessity noted in the denial.' : '' }, r.form || {});
+}
+function formPage(c, req, r) {
+  const f = formData(c, req, r), row = (l, v) => `<div class="dl">${l}</div><div>${v ? `<span class="dv">${esc(v)}</span>` : '<span class="dv empty"></span>'}</div>`;
+  return `<div class="dviewer ctx-form"><div class="dvscroll"><div class="dvpages" style="--z:1"><div class="dpage">${docHead(r.kind === 'pa' ? `${esc(req.plan)} Prior Authorization Request` : `Appeal ${r.n}: Request for Reconsideration`, esc(req.med))}
+    <div class="dsec">Member</div><div class="dgrid">${row('Patient', f.patient)}${row('DOB', f.dob)}${row('Plan', f.plan)}${row('Member ID', f.member)}${row('PBM', f.pbm)}${row('BIN / PCN', f.binpcn)}</div>
+    <div class="dsec">Prescriber</div><div class="dgrid">${row('Prescriber', f.prescriber)}${row('NPI', f.npi)}${row('Phone', f.pphone)}${row('Fax', f.pfax)}</div>
+    <div class="dsec">Medication and diagnosis</div><div class="dgrid">${row('Drug', f.drug)}${row('Quantity', f.qty)}${row('Directions', f.sig)}${row('Diagnosis', [f.dx, f.dx2].filter(Boolean).join('; '))}</div>
+    <div class="dsec">Clinical information</div><div class="dgrid tight">${row('Prior therapies', f.prior)}${row('Rationale', f.rationale)}${row('Supporting labs', f.labs)}${r.kind === 'appeal' ? row('Denial reason', f.denial) + row('Appeal statement', f.appeal) : ''}</div>
+    <div class="dsigs"><div><span class="dsig">&nbsp;</span><span class="dl">Prescriber signature · Date</span></div></div><div class="dfoot">Prefilled from HealthPacer · ${esc(req.id)}</div></div></div></div></div>`;
+}
+function coverPage(cover, ed, to, num, docs, c) {
+  return `<div class="dviewer ctx-cover"><div class="dvscroll"><div class="dvpages" style="--z:1"><div class="dpage">${docHead(esc(cover), 'eMAX Health Patient Services')}
+    <div class="dgrid tight"><div class="dl">To</div><div><span class="dv">${esc(ed.att || to || '')}</span></div><div class="dl">Fax</div><div><span class="dv">${esc(num || '')}</span></div><div class="dl">From</div><div><span class="dv">${esc(ME)}, eMAX Health Patient Services</span></div><div class="dl">Re</div><div><span class="dv">${esc(ed.re || `${fullName(c)} · DOB ${fmt(c.dob)} · ${c.id}`)}</span></div><div class="dl">Pages</div><div><span class="dv">${docs.length ? docs.length * 2 + 1 : 1} including cover</span></div></div>
+    <div class="dsec">Message</div><p style="margin:0">${esc(ed.msg || COVER_MSG[cover] || '')}</p>
+    ${docs.length ? `<div class="dsec">Enclosed</div><ol style="margin:0;padding-left:1.4em">${docs.map(d => `<li>${esc(d)}</li>`).join('')}</ol>` : ''}
+    <div class="dfoot">Confidential health information. If received in error, call 1-555-867-5309.</div></div></div></div></div>`;
+}
+const COVER_MSG = { 'eMax Signature Request': 'Please review, sign and fax back the enclosed prior authorization form.', 'eMax PA Cover Sheet': 'Enclosed is a prior authorization request with supporting documentation. Please contact us with any questions.', 'eMax Appeal Attestation': 'Enclosed is an appeal for reconsideration. Please review and sign the attestation and return it by fax.', 'eMax Additional Information Request': 'The plan has requested additional information for this patient. Please send the items listed below.', 'Carrier PA Fax Cover': 'Prior authorization request enclosed.' };
+
+/* ---------- Authorizations tab ---------- */
+S.ar7open = S.ar7open || {};
+const _tabAuthV7 = tabAuth;
+tabAuth = function (c) {
+  if (!isV7()) return _tabAuthV7(c);
+  const reqs = auth7(c).reqs;
+  return `${tph('Authorization requests', `<button class="btn" data-a="modal" data-v="arnew7">${ic('plus', 16)} Add authorization request</button>`)}
+  ${reqs.length ? reqs.slice().reverse().map(req => reqCard(c, req)).join('') : `<div class="emptyline">No authorization requests yet. Add one when the benefit investigation shows the plan needs it.</div>`}`;
+};
+function reqCard(c, req) {
+  const r = rd7(req), open = S.ar7open[req.id] ?? req.open, out = outStatus(req), o = r.outcome;
+  const result = o && o.result === 'Approved' ? `<div class="ar7res ok"><div><span class="lbl">Authorization number</span><b>${esc(o.num || 'not provided')}</b></div><div><span class="lbl">Effective dates</span><b class="num">${esc(o.eff)}</b><span class="num" style="font-size:12px">to ${esc(o.exp)}</span></div></div>`
+    : o ? `<div class="ar7res bad"><div><span class="lbl">Denial reason</span><b>${esc(o.reason)}</b></div></div>` : '';
+  return `<section class="ar7 ${open ? 'open' : ''}"><div class="ar7h" data-a="ar7tog" data-id="${req.id}">
+    <span class="ar7ic">${ic('shield', 18)}</span><div class="ar7t"><b>${esc(req.type)}</b><span>${esc(req.med)} · ${esc(req.plan)}${req.pbm ? ` / ${esc(req.pbm)}` : ''}</span><span class="muted">${esc(req.by)} · Started ${esc(req.created)}</span></div>
+    <div class="ar7c"><span class="lbl">Request status</span>${pill(reqStatus(req))}</div><div class="ar7c"><span class="lbl">Outcome</span>${pill(out)}${r.kind === 'appeal' ? `<span class="muted" style="font-size:12px">${esc(roundName(r))}</span>` : ''}</div>
+    <div class="ar7c"><span class="lbl">Last action by</span><span>${esc(req.last.by)}</span><span class="muted num" style="font-size:12px">${esc(req.last.when)}</span></div>
+    ${result}<button class="iconbtn ar7chev" aria-label="${open ? 'Collapse' : 'Expand'}">${ic('chevd', 18)}</button></div>
+    ${open ? `<div class="ar7b">${req.rounds.map((x, i) => roundBlock(c, req, x, i === req.rounds.length - 1)).join('')}</div>` : ''}</section>`;
+}
+function stepper7(r) {
+  const at = r.outcome ? 6 : r.step;
+  return `<div class="stepper s7">${STEPS7.map((s, i) => { const done = i < at, cur = i === at, bad = i === 5 && r.outcome && r.outcome.result === 'Denied';
+    return `<div class="step ${bad ? 'bad' : done ? 'done' : cur ? 'cur' : ''}"><div class="bar"></div><div class="st"><span class="ic">${bad ? ic('x', 12) : done ? ic('check', 12) : i + 1}</span><span>${i === 0 && r.kind === 'appeal' ? 'Edit appeal form' : s}</span></div></div>`; }).join('')}</div>`;
+}
+function logRows(r) {
+  const rows = [];
+  if (r.formFile) rows.push(['Form saved', r.formFile, '', null, r.formSeq || 0]);
+  r.hcp.forEach((s, i) => rows.push([`${i ? 'Resent' : 'Faxed'} to HCP · ${s.when}`, `${s.to} · ${s.num}`, `Cover: ${s.cover} · ${s.docs.join(', ')}`, ['hcp', i], s.seq]));
+  if (r.signed) rows.push(['Signed form received', r.signed, '', null, r.signedSeq || 0]);
+  r.carrier.forEach((s, i) => rows.push([`${s.addl ? 'Additional information faxed' : i ? 'Resent' : 'Faxed'} to ${s.to.includes('PBM') ? 'PBM' : 'carrier'} · ${s.when}`, `${s.to} · ${s.num}`, `Cover: ${s.cover} · ${s.docs.join(', ')}`, ['carrier', i], s.seq]));
+  r.addl.forEach(a => rows.push([`Additional info requested · ${a.when}`, a.via === 'fax' ? 'Faxed request to the HCP' : `By ${a.method.toLowerCase()} with ${a.who}`, a.note, null, a.seq || 0]));
+  if (r.outcome) rows.push([`${r.outcome.result} · ${r.outcome.when}`, r.outcome.result === 'Approved' ? `Auth # ${r.outcome.num || 'not provided'} · ${r.outcome.eff} to ${r.outcome.exp}` : r.outcome.reason, `Recorded by ${r.outcome.by}`, null, r.outcome.seq || 1e9]);
+  return rows.sort((x, y) => x[4] - y[4]);
+}
+function roundBlock(c, req, r, cur) {
+  const rows = logRows(r), key = req.id + r.kind + r.n, shut = !cur && !S.expanded['r7' + key];
+  if (shut) return `<div class="ar7round past"><div class="ar7rh"><h4>${esc(roundName(r))}</h4>${r.outcome ? pill(r.outcome.result) : ''}<span class="muted" style="font-size:13px">${r.outcome ? esc(r.outcome.result === 'Denied' ? r.outcome.reason : `Auth # ${r.outcome.num || 'not provided'}`) + ' · ' + esc(r.outcome.when) : ''}</span><span class="sp"></span><button class="link-btn" data-a="ar7hist" data-v="${key}">Show history (${rows.length}) ${ic('chevd', 13)}</button></div></div>`;
+  return `<div class="ar7round ${cur ? 'cur' : ''}"><div class="ar7rh"><h4>${esc(roundName(r))}</h4>${r.outcome ? pill(r.outcome.result) : pill(r.awaitingAddl ? 'Additional info requested' : `Step ${r.step + 1} of 6`)}<span class="sp"></span>${!cur ? `<button class="link-btn" data-a="ar7hist" data-v="${key}">Hide history ${ic('chevd', 13).replace('<svg', '<svg style="transform:rotate(180deg)"')}</button>` : ''}</div>
+    ${cur ? stepper7(r) + action7(c, req, r) : ''}
+    ${rows.length ? `<div class="ar7log">${rows.map(([t, a, b, k]) => `<div class="ar7lr"><span class="dot"></span><div><b>${esc(t)}</b><span>${esc(a)}</span>${b ? `<span class="muted">${esc(b)}</span>` : ''}</div>${k && cur && !r.outcome ? `<button class="btn sm ghost" data-a="ar7resend" data-k="${k[0]}" data-i="${k[1]}" data-id="${req.id}">${ic('refresh', 14)} Resend</button>` : ''}</div>`).join('')}</div>` : ''}</div>`;
+}
+function action7(c, req, r) {
+  const A = (t, p, btns, cls = '', extra = '') => `<div class="action ${cls}"><div><h4>${t}</h4><p>${p}</p></div><div class="btns">${btns}</div>${extra}</div>`, id = req.id;
+  if (r.outcome) {
+    if (r.outcome.result === 'Approved') return A('Authorization approved', `Authorization ${esc(r.outcome.num || 'number not provided')}, valid ${esc(r.outcome.eff)} to ${esc(r.outcome.exp)}.`, '', 'ok');
+    const n = req.rounds.filter(x => x.kind === 'appeal').length;
+    return A(`${esc(roundName(r))} denied`, `Reason: ${esc(r.outcome.reason)}. ${n >= 3 ? 'All 3 appeals have been used.' : `${3 - n} ${3 - n === 1 ? 'appeal' : 'appeals'} left. An appeal runs through the same steps.`}`, n >= 3 ? '' : `<button class="btn primary" data-a="ar7appeal" data-id="${id}">Start appeal ${n + 1}</button>`, 'bad');
+  }
+  const formWord = r.kind === 'pa' ? `${esc(req.plan)} PA form` : `appeal ${r.n} form`;
+  switch (r.step) {
+    case 0: return A(`Edit the ${formWord}`, 'Patient, plan, prescriber, medication and diagnosis are filled in from the case. Add the clinical details to complete it.', `<button class="btn primary" data-a="modal" data-v="arform7" data-id="${id}">${ic('edit', 16)} Edit form</button>`);
+    case 1: return A('Review and save the form', 'Check the completed form. Saving files it under Documents so it can be faxed.', `<button class="btn" data-a="modal" data-v="arform7" data-id="${id}">${ic('edit', 16)} Edit again</button><button class="btn primary" data-a="ar7save" data-id="${id}">${ic('check', 16)} Save form</button>`, '', `<div class="ar7prev">${formPage(c, req, r)}</div>`);
+    case 2: return A(`Send to ${esc(c.prescriber)} for signature`, 'Fax the saved form to the prescriber\'s office with a cover sheet and any other documents.', `<button class="btn primary" data-a="ar7fax" data-k="hcp" data-id="${id}">${ic('fax', 16)} Send to HCP</button>`);
+    case 3: return A('Upload the signed form', `Faxed to the HCP on ${esc(r.hcp[r.hcp.length - 1].when)}. When it comes back signed, upload it or choose it from the case documents. If it hasn't arrived, resend from the history below.`, `<button class="btn primary" data-a="modal" data-v="arsigned7" data-id="${id}">${ic('upload', 16)} Add signed form</button>`);
+    case 4: return A(`Send to ${esc(req.plan)}${req.pbm ? ` or ${esc(req.pbm)}` : ''}`, 'Choose the documents to fax and their order. A cover sheet cannot be faxed on its own.', `<button class="btn primary" data-a="ar7fax" data-k="carrier" data-id="${id}">${ic('fax', 16)} Send to carrier or PBM</button>`);
+    default:
+      if (r.awaitingAddl) { const a = r.addl[r.addl.length - 1]; return A('Send the additional information to the carrier', `Requested ${esc(a.when)}: ${esc(a.note)}. Once you have it, fax it to the carrier with the original request documents.`, `<button class="btn primary" data-a="ar7fax" data-k="addlcarrier" data-id="${id}">${ic('fax', 16)} Send additional information</button>`, 'warn'); }
+      return A('Waiting on the carrier\'s decision', `Faxed ${esc(r.carrier[r.carrier.length - 1].when)}. If the carrier asks for more, record it. When the decision arrives, complete the request.`, `<button class="btn" data-a="modal" data-v="addl7" data-id="${id}">${ic('info', 16)} Additional info requested</button><button class="btn primary" data-a="modal" data-v="out7" data-id="${id}">${ic('check', 16)} Complete authorization request</button>`, 'warn');
+  }
+}
+
+/* ---------- Modals ---------- */
+const reqOf = (id) => auth7(byId(S.caseId)).reqs.find(x => x.id === id);
+const _xmV7 = extraModal;
+extraModal = function (m, wrap) {
+  const c = byId(S.caseId), e = m.err || {}, cancel = `<button class="btn" data-a="mclose">Cancel</button>`;
+  if (m.type === 'arnew7') { const P = plans6(c), R = rxOf(c);
+    return wrap('Add authorization request', `${inp('a7type', 'Request type', { opts: ['Prior authorization', 'Medical exception', 'Formulary exception'], ph: false })}
+      <div class="input ${e.med ? 'err' : ''}"><span class="lbl">Medication <span class="req">*</span></span><div class="radio-cards">${[[R.cur.med, `Active prescription · qty ${R.cur.qty} · written ${R.cur.written}`]].concat(R.hist.slice(0, 1).map(h => [h.med, `Earlier prescription · ${h.received}`])).map(([n, s], i) => `<label><input type="radio" name="a7med" value="${esc(n)}" ${i === 0 ? 'checked' : ''}><span><b>${esc(n)}</b><br><span class="muted">${esc(s)}</span></span></label>`).join('')}</div></div>
+      ${inp('a7plan', 'Plan', { req: 1, err: e.plan, opts: P.map(p => `${p.name}${p.pbm && p.pbm.name ? ' / ' + p.pbm.name : ''}`), ph: P.length ? false : 'Add a plan on Benefits first' })}`,
+      `${cancel}<button class="btn primary" data-a="ar7create">Create request</button>`); }
+  if (m.type === 'arform7') { const req = reqOf(m.id), r = rd7(req), f = formData(c, req, r), tab = m.tab || 'member';
+    const T = [['member', 'Patient and plan'], ['presc', 'Prescriber and drug'], ['clin', r.kind === 'pa' ? 'Clinical' : 'Clinical and appeal']];
+    const body = tab === 'member' ? `<div class="polgrid">${inp('f7patient', 'Patient', { v: f.patient })}${inp('f7dob', 'Date of birth', { v: f.dob })}${inp('f7plan', 'Plan', { v: f.plan })}${inp('f7member', 'Member ID', { v: f.member })}${inp('f7pbm', 'PBM', { v: f.pbm })}${inp('f7binpcn', 'BIN / PCN', { v: f.binpcn })}</div>`
+      : tab === 'presc' ? `<div class="polgrid">${inp('f7prescriber', 'Prescriber', { v: f.prescriber })}${inp('f7npi', 'NPI', { v: f.npi })}${inp('f7pphone', 'Phone', { v: f.pphone })}${inp('f7pfax', 'Fax', { v: f.pfax })}${inp('f7drug', 'Drug', { v: f.drug })}${inp('f7qty', 'Quantity', { v: f.qty })}</div>${inp('f7sig', 'Directions', { v: f.sig, area: 1, h: 60 })}${inp('f7dx', 'Diagnosis', { v: [f.dx, f.dx2].filter(Boolean).join('; ') })}`
+      : `${inp('f7prior', 'Prior therapies', { v: f.prior, area: 1, h: 60 })}${inp('f7rationale', 'Rationale', { v: f.rationale, area: 1, h: 70 })}${inp('f7labs', 'Supporting labs', { v: f.labs, area: 1, h: 60 })}${r.kind === 'appeal' ? inp('f7denial', 'Denial reason', { v: f.denial }) + inp('f7appeal', 'Appeal statement', { v: f.appeal, area: 1, h: 70 }) : ''}`;
+    return wide(wrap(`Edit ${r.kind === 'pa' ? 'PA' : 'appeal ' + r.n} form · ${esc(req.plan)}`, `<div class="note-banner">${ic('info', 16)}<span>Filled in from the case. Changes here only affect this form.</span></div><div class="seg lite">${T.map(([k, l]) => `<button data-a="ar7ftab" data-v="${k}" data-id="${req.id}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>${body}`,
+      `${cancel}<button class="btn primary" data-a="ar7formsave" data-id="${req.id}">Review form ${ic('chevr', 16)}</button>`)); }
+  if (m.type === 'arsigned7') { const req = reqOf(m.id), how = m.how || 'upload', r = rd7(req);
+    return wrap('Signed form from the HCP', `<div class="seg lite">${[['upload', 'Upload a file'], ['pick', 'Choose from case documents']].map(([k, l]) => `<button data-a="ar7sighow" data-v="${k}" aria-pressed="${how === k}">${l}</button>`).join('')}</div>
+      ${how === 'upload' ? `<label class="dropzone ${e.f ? 'err' : ''}" data-a="ar7sigfile">${ic('upload', 22)}<span><b>${S.sigName ? esc(S.sigName) : 'Choose the signed form'}</b><br><span class="muted">PDF or image, up to 2 MB</span></span></label>${e.f ? errField('Choose the signed form to upload') : ''}`
+        : `<div class="radio-cards">${caseDocs7().slice(0, 6).map((d, i) => `<label><input type="radio" name="a7sig" value="${esc(d)}" ${i === 0 ? 'checked' : ''}><span>${ic('file', 14)} <b>${esc(d)}</b></span></label>`).join('')}</div>`}
+      ${inp('a7sigdate', 'Date received', { type: 'date', v: isoOf(fmt(TODAY)), w: 220 })}`, `${cancel}<button class="btn primary" data-a="ar7signed" data-id="${req.id}">${ic('check', 16)} Save signed form</button>`); }
+  if (m.type === 'addl7') { const req = reqOf(m.id), how = m.how || 'phone';
+    return wrap('Additional information requested', `<p class="muted" style="margin:0;font-size:13px">Choose how to request additional information from the HCP before sending updated documents to the carrier.</p>
+      <div class="radio-cards">${[['phone', 'Request made via phone or email', 'Record that additional information was requested by phone or email. This adds a note to the case.'], ['fax', 'Fax request to HCP', 'Send a fax to the HCP requesting additional information.']].map(([k, t, s]) => `<label><input type="radio" name="a7how" data-a="ar7how" data-v="${k}" data-id="${req.id}" ${how === k ? 'checked' : ''}><span><b>${t}</b><br><span class="muted">${s}</span></span></label>`).join('')}</div>
+      ${inp('a7need', 'What the carrier asked for', { req: 1, err: e.need, area: 1, h: 70, phText: 'e.g. Last two cortisol results and chart notes' })}
+      ${how === 'phone' ? `<div class="polgrid">${inp('a7method', 'Requested by', { opts: ['Phone', 'Email'], ph: false })}${inp('a7who', 'Spoke with or emailed', { req: 1, err: e.who, phText: 'Name at the office' })}</div>` : ''}`,
+      `${cancel}<button class="btn primary" data-a="ar7addl" data-id="${req.id}">${how === 'fax' ? `Continue to fax ${ic('chevr', 16)}` : 'Save request'}</button>`); }
+  if (m.type === 'out7') { const req = reqOf(m.id), o = m.out || '';
+    return wrap('Complete authorization request', `${inp('o7out', 'Outcome', { req: 1, err: e.out, opts: ['Approved', 'Denied'], ph: 'Select outcome', v: o })}
+      ${o === 'Denied' ? inp('o7reason', 'Reason for denial', { req: 1, err: e.reason, area: 1, h: 80 }) : `${inp('o7num', 'Authorization number', { opt: 1, phText: 'Authorization number' })}<div class="polgrid">${inp('o7eff', 'Effective date', { type: 'date', req: o === 'Approved', err: e.eff })}${inp('o7exp', 'Expiration date', { type: 'date', req: o === 'Approved', err: e.exp })}</div>`}`,
+      `${cancel}<button class="btn ${o === 'Denied' ? 'danger' : 'primary'}" data-a="ar7out" data-id="${req.id}">${o === 'Denied' ? 'Mark as denied' : 'Complete authorization'}</button>`); }
+  if (m.type === 'fax7') return fax7Modal(c, m, wrap, cancel);
+  return _xmV7(m, wrap);
+};
+document.addEventListener('change', (e) => { if (e.target.id === 'o7out' && S.modal && S.modal.type === 'out7') { S.modal.out = e.target.value; S.modal.err = null; render(); } });
+
+/* ---------- Fax modal: recipient, cover sheet preview and edit, documents in order ---------- */
+function fax7Modal(c, m, wrap, cancel) {
+  const req = reqOf(m.id), r = rd7(req), F = S.fx, e = m.err || {}, toHCP = F.mode === 'hcp' || F.mode === 'addlhcp';
+  const facPres = facPrescribers(FACILITIES.find(x => x.name === c.facility)); const P = plans6(c), p = P.find(x => x.name === req.plan) || {};
+  const carrierOpts = [`${req.plan} PA fax`, ...(p.pbm && p.pbm.name ? [`${p.pbm.name} PA fax`] : []), 'Other number'];
+  const title = { hcp: 'Send to HCP', addlhcp: 'Fax request to HCP', carrier: 'Send to carrier or PBM', addlcarrier: 'Send additional information to carrier' }[F.mode] + (m.resend ? ' · resend' : '');
+  const docsPicker = F.pick ? `<div class="fxpick"><div class="fxpick-h"><b>Case documents</b><button class="link-btn" data-a="ar7upnew">${ic('upload', 14)} Upload a new file</button></div>${caseDocs7().map(d => `<label class="fxpr"><input type="checkbox" data-a="ar7doc" data-v="${esc(d)}" ${F.docs.includes(d) ? 'checked' : ''}><span>${ic('file', 14)} ${esc(d)}</span></label>`).join('')}<div class="fxpick-f"><button class="btn sm primary" data-a="ar7pick">Done</button></div></div>` : '';
+  const list = F.docs.length ? `<div class="lbl" style="margin-top:4px">Selected documents (drag to reorder)</div><div class="fxdocs">${F.docs.map((d, i) => `<div class="fxdoc" draggable="true" data-i="${i}"><span class="grip" aria-hidden="true">⋮⋮</span><span class="n num">${i + 1}</span>${ic('file', 14)}<span class="nm">${esc(d)}</span><button class="iconbtn" data-a="ar7mv" data-i="${i}" data-v="-1" aria-label="Move up" ${i === 0 ? 'disabled' : ''}>${ic('chevl', 14).replace('<svg', '<svg style="transform:rotate(90deg)"')}</button><button class="iconbtn" data-a="ar7mv" data-i="${i}" data-v="1" aria-label="Move down" ${i === F.docs.length - 1 ? 'disabled' : ''}>${ic('chevr', 14).replace('<svg', '<svg style="transform:rotate(90deg)"')}</button><button class="iconbtn danger-t" data-a="ar7rm" data-i="${i}" aria-label="Remove">${ic('x', 14)}</button></div>`).join('')}</div>` : '';
+  const coverTools = `<div class="fxcov"><button class="btn sm ${F.preview ? 'on' : ''}" data-a="ar7cprev">${ic('file', 14)} ${F.preview ? 'Hide preview' : 'Preview'}</button><button class="btn sm ${F.edit ? 'on' : ''}" data-a="ar7cedit">${ic('edit', 14)} ${F.edit ? 'Done editing' : 'Edit'}</button></div>`;
+  const body = `<div class="input"><span class="lbl">How would you like to send?</span><div class="sendhow"><span class="dotsel"></span><b>Fax</b><span class="pill nodot t-ok">Send via fax number</span></div></div>
+    ${toHCP ? `<div class="polgrid">${inp('x7prov', 'Provider <span class="autof">Auto-filled</span>', { opts: facPres.length ? facPres : [c.prescriber], ph: false, v: F.to })}${inp('x7num', 'Medical facility location fax number', { req: 1, err: e.num, v: F.num, help: 'Change it if the office asked you to use another number' })}</div>`
+      : `<div class="polgrid">${inp('x7to', 'Send to', { opts: carrierOpts, ph: false, v: F.to })}${inp('x7num', 'Fax number', { req: 1, err: e.num, v: F.num })}</div>`}
+    <div class="polgrid">${inp('x7cover', 'Cover sheet <span class="autof">Auto-filled</span>', { opts: COVERS, ph: false, v: F.cover })}<div class="input"><span class="lbl">&nbsp;</span>${coverTools}</div></div>
+    ${F.edit ? `<div class="fxcedit"><div class="polgrid">${inp('x7att', 'Attention', { v: F.ce.att || (toHCP ? F.to : F.to), opt: 1 })}${inp('x7re', 'Re', { v: F.ce.re || `${fullName(c)} · DOB ${fmt(c.dob)} · ${c.id}`, opt: 1 })}</div>${inp('x7msg', 'Message on the cover sheet', { area: 1, h: 70, v: F.ce.msg || COVER_MSG[F.cover] || '' })}</div>` : ''}
+    ${F.preview ? `<div class="fxprev">${coverPage(F.cover, F.ce, F.to, F.num, F.docs, c)}</div>` : ''}
+    <div class="input ${e.docs ? 'err' : ''}"><span class="lbl">Select documents <span class="req">*</span></span><div><button class="btn primary sm" data-a="ar7pick">${ic('plus', 14)} Select documents</button></div><span class="help">Maximum file size 2 MB. PDF or image files only.${toHCP ? '' : ' A cover sheet cannot be faxed on its own.'}</span>${docsPicker}${list}${e.docs ? errField('Select at least one document from the case') : ''}</div>`;
+  return wide(wrap(title, body, `${cancel}<button class="btn primary" data-a="ar7send" data-id="${req.id}">${ic('fax', 16)} ${m.resend ? 'Resend' : 'Send'}</button>`));
+}
+function openFax7(c, req, mode, from) {
+  const r = rd7(req), P = plans6(c), p = P.find(x => x.name === req.plan) || {}, pf = info(c).presc, toHCP = mode === 'hcp' || mode === 'addlhcp';
+  const defDocs = mode === 'hcp' ? [r.formFile].filter(Boolean) : mode === 'carrier' ? [r.signed].filter(Boolean) : mode === 'addlcarrier' ? [r.signed].filter(Boolean) : [];
+  S.fx = from ? { mode, to: from.to.replace(/, .*/, ''), num: from.num, cover: from.cover, docs: from.docs.slice(), ce: Object.assign({}, from.ce || {}), pick: false, preview: false, edit: false }
+    : { mode, to: toHCP ? c.prescriber : `${req.plan} PA fax`, num: toHCP ? pf.fax : (carrierRec(req.plan).fax || ''), cover: mode === 'hcp' ? (r.kind === 'pa' ? 'eMax Signature Request' : 'eMax Appeal Attestation') : mode === 'addlhcp' ? 'eMax Additional Information Request' : 'eMax PA Cover Sheet', docs: defDocs, ce: {}, pick: false, preview: false, edit: false };
+  if (from && !toHCP) S.fx.to = from.to;
+  S.modal = { type: 'fax7', id: req.id, resend: !!from };
+}
+const fxGrab = () => { const F = S.fx; if (!F) return; const g = (id) => document.getElementById(id); if (g('x7prov')) F.to = g('x7prov').value; if (g('x7to')) F.to = g('x7to').value; if (g('x7num')) F.num = g('x7num').value; if (g('x7cover')) F.cover = g('x7cover').value; if (g('x7att')) F.ce.att = g('x7att').value; if (g('x7re')) F.ce.re = g('x7re').value; if (g('x7msg')) F.ce.msg = g('x7msg').value; };
+document.addEventListener('change', (e) => {
+  if (!S.modal || S.modal.type !== 'fax7') return; const id = e.target.id; const c = byId(S.caseId), req = reqOf(S.modal.id), P = plans6(c), p = P.find(x => x.name === req.plan) || {};
+  if (id === 'x7to') { const v = e.target.value; fxGrab(); S.fx.num = v.startsWith(req.plan) ? carrierRec(req.plan).fax || '' : p.pbm && v.startsWith(p.pbm.name) ? (p.pbm.fax || carrierRec(p.pbm.name).fax || '') : ''; render(); }
+  if (id === 'x7prov') { fxGrab(); render(); }
+  if (id === 'x7cover') { fxGrab(); S.fx.ce.msg = ''; render(); }
+});
+/* drag to reorder */
+let FXDRAG = null;
+document.addEventListener('dragstart', (e) => { const d = e.target.closest && e.target.closest('.fxdoc'); if (!d) return; FXDRAG = +d.dataset.i; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', String(FXDRAG)); } catch (x) { } d.classList.add('dragging'); });
+document.addEventListener('dragover', (e) => { const d = e.target.closest && e.target.closest('.fxdoc'); if (d && FXDRAG != null) { e.preventDefault(); document.querySelectorAll('.fxdoc.over').forEach(x => x.classList.remove('over')); d.classList.add('over'); } });
+document.addEventListener('drop', (e) => { const d = e.target.closest && e.target.closest('.fxdoc'); if (!d || FXDRAG == null) return; e.preventDefault(); fxGrab(); const to = +d.dataset.i, L = S.fx.docs; const [x] = L.splice(FXDRAG, 1); L.splice(to, 0, x); FXDRAG = null; render(); });
+document.addEventListener('dragend', () => { FXDRAG = null; document.querySelectorAll('.fxdoc').forEach(x => x.classList.remove('over', 'dragging')); });
+
+/* ---------- Actions ---------- */
+Object.assign(EXTRA, {
+  ar7tog(t, e) { if (e && e.target.closest('button:not(.ar7chev)')) return; const req = reqOf(t.dataset.id); S.ar7open[req.id] = !(S.ar7open[req.id] ?? req.open); },
+  ar7create() { const c = byId(S.caseId), plan = val('a7plan'), med = (document.querySelector('input[name=a7med]:checked') || {}).value; if (!plan) { S.modal.err = { plan: 'Choose a plan' }; return; }
+    const [pl, pb] = plan.split(' / '); const req = { id: 'AR' + Math.floor(1000 + Math.random() * 9000), type: val('a7type'), med, plan: pl, pbm: pb || '', created: fmt(TODAY), by: ME, rounds: [{ kind: 'pa', n: 0, step: 0, form: null, formFile: null, hcp: [], signed: null, carrier: [], addl: [], awaitingAddl: false, outcome: null }], last: null, open: true };
+    auth7(c).reqs.push(req); S.ar7open[req.id] = true; touch(c, req, 'Authorization request created'); S.modal = null; toast(`${req.type} started for ${med}`); },
+  ar7hist(t) { const k = 'r7' + t.dataset.v; S.expanded[k] = !S.expanded[k]; },
+  ar7ftab(t) { const req = reqOf(t.dataset.id), r = rd7(req); r.form = Object.assign(r.form || {}, grabForm()); S.modal.tab = t.dataset.v; },
+  ar7formsave(t) { const c = byId(S.caseId), req = reqOf(t.dataset.id), r = rd7(req); r.form = Object.assign(r.form || {}, grabForm()); r.step = 1; touch(c, req, 'Form edited'); S.modal = null; toast('Form updated. Review it and save'); },
+  ar7save(t) { const c = byId(S.caseId), req = reqOf(t.dataset.id), r = rd7(req); r.formFile = `${r.kind === 'pa' ? 'PA' : 'Appeal' + r.n}_form_${req.plan.split(' ')[0]}_${fmt(TODAY).replace(/\//g, '')}.pdf`; r.formSeq = sq(); DOCS.unshift([r.formFile, r.kind === 'pa' ? 'Prior authorization' : 'Appeal', fmt(TODAY), ME, '210 KB', false, false]); r.step = 2; touch(c, req, 'Form saved'); toast(`${r.formFile} saved to Documents`); },
+  ar7fax(t) { const c = byId(S.caseId), req = reqOf(t.dataset.id); openFax7(c, req, t.dataset.k); },
+  ar7resend(t) { const c = byId(S.caseId), req = reqOf(t.dataset.id), r = rd7(req), s = r[t.dataset.k][+t.dataset.i]; openFax7(c, req, t.dataset.k === 'hcp' ? 'hcp' : (s.addl ? 'addlcarrier' : 'carrier'), s); },
+  ar7pick() { fxGrab(); S.fx.pick = !S.fx.pick; if (S.modal.err) delete S.modal.err.docs; },
+  ar7doc(t) { fxGrab(); const d = t.dataset.v, L = S.fx.docs; const i = L.indexOf(d); i > -1 ? L.splice(i, 1) : L.push(d); if (S.modal.err) delete S.modal.err.docs; },
+  ar7upnew() { fxGrab(); const n = `Upload_${fmt(TODAY).replace(/\//g, '')}_${S.fx.docs.length + 1}.pdf`; DOCS.unshift([n, 'Supporting document', fmt(TODAY), ME, '320 KB', false, false]); S.fx.docs.push(n); toast(`${n} uploaded and added`); },
+  ar7mv(t) { fxGrab(); const i = +t.dataset.i, j = i + +t.dataset.v, L = S.fx.docs; [L[i], L[j]] = [L[j], L[i]]; },
+  ar7rm(t) { fxGrab(); S.fx.docs.splice(+t.dataset.i, 1); },
+  ar7cprev() { fxGrab(); S.fx.preview = !S.fx.preview; },
+  ar7cedit() { fxGrab(); S.fx.edit = !S.fx.edit; },
+  ar7send(t) {
+    fxGrab(); const c = byId(S.caseId), req = reqOf(t.dataset.id), r = rd7(req), F = S.fx, err = {}, again = S.modal.resend;
+    if (!F.num) err.num = 'Enter a fax number'; if (!F.docs.length) err.docs = 1; if (Object.keys(err).length) { S.modal.err = err; return; }
+    const toHCP = F.mode === 'hcp' || F.mode === 'addlhcp'; const to = toHCP ? `${F.to}, ${c.facility}` : F.to;
+    const s = send7(nowStamp(), ME, to, F.num, F.cover, F.docs.slice(), F.ce.msg); s.ce = Object.assign({}, F.ce); if (F.mode === 'addlcarrier') s.addl = true;
+    FAXES.unshift([nowStamp(), 'Outbound', to, F.num, F.docs.length * 2 + 1, 'Sent', { cover: true, docs: F.docs.map(d => ({ name: d, pages: 2 })), note: F.ce.msg || COVER_MSG[F.cover] }]);
+    if (F.mode === 'hcp') { r.hcp.push(s); if (r.step === 2) r.step = 3; }
+    else if (F.mode === 'addlhcp') { r.addl[r.addl.length - 1].fax = s; r.awaitingAddl = true; }
+    else { r.carrier.push(s); if (r.step === 4) r.step = 5; if (F.mode === 'addlcarrier') r.awaitingAddl = false; }
+    touch(c, req, `${again ? 'Resent' : 'Faxed'} to ${to}`); S.modal = null; S.fx = null; toast(`Fax ${again ? 'resent' : 'sending'} to ${to}`);
+  },
+  ar7upload(t) { const c = byId(S.caseId), req = reqOf(t.dataset.id), r = rd7(req); r.signed = `${r.kind === 'pa' ? 'PA' : 'Appeal' + r.n}_signed_${fmt(TODAY).replace(/\//g, '')}.pdf`; r.signedSeq = sq(); DOCS.unshift([r.signed, r.kind === 'pa' ? 'Prior authorization' : 'Appeal', fmt(TODAY), ME, '260 KB', false, false]); r.step = 4; touch(c, req, 'Signed form uploaded'); toast('Signed form uploaded'); },
+  ar7sighow(t) { S.modal.how = t.dataset.v; S.modal.err = null; },
+  ar7sigfile(t, e) { if (e) e.preventDefault(); const r = rd7(reqOf(S.modal.id)); S.sigName = `${r.kind === 'pa' ? 'PA' : 'Appeal' + r.n}_signed_${fmt(TODAY).replace(/\//g, '')}.pdf`; if (S.modal.err) delete S.modal.err.f; },
+  ar7signed(t) { const c = byId(S.caseId), req = reqOf(t.dataset.id), r = rd7(req), how = S.modal.how || 'upload';
+    if (how === 'upload') { if (!S.sigName) { S.modal.err = { f: 1 }; return; } r.signed = S.sigName; DOCS.unshift([r.signed, r.kind === 'pa' ? 'Prior authorization' : 'Appeal', fmt(TODAY), ME, '260 KB', false, false]); }
+    else r.signed = (document.querySelector('input[name=a7sig]:checked') || {}).value;
+    r.signedSeq = sq(); r.step = 4; S.sigName = null; touch(c, req, 'Signed form received'); S.modal = null; toast(`${r.signed} saved as the signed form`); },
+  ar7how(t) { S.modal.how = t.dataset.v; S.modal.err = null; },
+  ar7addl(t) { const c = byId(S.caseId), req = reqOf(t.dataset.id), r = rd7(req), how = S.modal.how || 'phone', need = val('a7need'), who = val('a7who'), err = {};
+    if (!need) err.need = 'Describe what the carrier asked for'; if (how === 'phone' && !who) err.who = 'Who did you speak with or email?'; if (Object.keys(err).length) { S.modal.err = err; return; }
+    const a = { seq: sq(), when: nowStamp(), by: ME, via: how, method: val('a7method') || 'Fax', who, note: need }; r.addl.push(a);
+    if (how === 'phone') { r.awaitingAddl = true; NOTES.unshift([ME, 'Phone log', nowStamp(), `Additional information requested for ${req.id} by ${a.method.toLowerCase()} with ${who}: ${need}`, false]); touch(c, req, 'Additional information requested'); S.modal = null; toast('Request recorded and added to Notes'); }
+    else { touch(c, req, 'Additional information request started'); openFax7(c, req, 'addlhcp'); S.fx.ce.msg = `${COVER_MSG['eMax Additional Information Request']} Requested: ${need}`; } },
+  ar7out(t) { const c = byId(S.caseId), req = reqOf(t.dataset.id), r = rd7(req), o = val('o7out'), err = {};
+    if (!o) err.out = 'Choose an outcome';
+    if (o === 'Denied' && !val('o7reason')) err.reason = 'Add the denial reason';
+    if (o === 'Approved') { if (!val('o7eff')) err.eff = 'Enter the effective date'; if (!val('o7exp')) err.exp = 'Enter the expiration date'; }
+    if (Object.keys(err).length) { S.modal.err = err; S.modal.out = o; return; }
+    r.outcome = o === 'Denied' ? { result: 'Denied', reason: val('o7reason'), when: fmt(TODAY), by: ME, seq: sq() } : { result: 'Approved', num: val('o7num'), eff: usOf(val('o7eff')), exp: usOf(val('o7exp')), when: fmt(TODAY), by: ME, seq: sq() };
+    r.awaitingAddl = false; if (o === 'Approved') req.open = true; touch(c, req, `Outcome recorded: ${o}`); S.modal = null; toast(o === 'Approved' ? 'Authorization approved' : 'Marked as denied. You can start an appeal'); },
+  ar7appeal(t) { const c = byId(S.caseId), req = reqOf(t.dataset.id), n = req.rounds.filter(x => x.kind === 'appeal').length + 1; req.rounds.push({ kind: 'appeal', n, step: 0, form: null, formFile: null, hcp: [], signed: null, carrier: [], addl: [], awaitingAddl: false, outcome: null }); touch(c, req, `Appeal ${n} started`); toast(`Appeal ${n} started. It follows the same steps`); }
+});
+function grabForm() { const o = {}; document.querySelectorAll('.modal [id^="f7"]').forEach(el => { o[el.id.slice(2)] = el.value; }); if (o.dx != null) { const [a, ...b] = o.dx.split('; '); o.dx = a; o.dx2 = b.join('; '); } return o; }
+
+/* ---------- Feedback panel ---------- */
+const NOTES_V7 = { case: [['Authorization requests follow your process', 'Add authorization request (choose the medication), edit the prefilled form, review and save it, fax it to the HCP, upload the signed form, fax it to the carrier or PBM, then complete it as approved or denied.'], ['Fax with cover sheet and documents', 'Change the fax number, preview or edit the cover sheet, pick documents from the case and drag them into order. The carrier fax needs at least one document.'], ['Resend', 'Every fax in the history can be resent with the same window and a new date.'], ['Additional info requested', 'Appears once the request is with the carrier. Record a phone or email request as a note, or fax the HCP, then send the additional information to the carrier.'], ['Appeals', 'A denial can be appealed. The appeal runs through the same steps.']] };
+/* ================= V8: prescription triage and shipments, review round 7 ================= */
+Object.assign(P, { box: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/>' });
+VERSIONS.unshift(['v8', 'V8', 'Review round 7', 'Prescription triage and shipments: triage sends the prescription to the specialty pharmacy with type, scheduled date, notes and documents, by electronic feed, fax or both; the current triage shows its transmit, feed and fax status; every triage is kept in history; a shipments panel replaces the single shipment line']);
+S.ver = VERSIONS[0][0]; try { const v = localStorage.getItem('hp-ver'); if (v && VERSIONS.some(x => x[0] === v)) S.ver = v; } catch (e) { }
+applyVersion(); applyApp();
+const isV8 = () => vnum() >= 8 && !isHCP();
+Object.assign(TONE, { 'Paid': 't-ok', 'Not Paid': 't-warn', 'Accepted': 't-ok', 'Delivered': 't-ok', 'Sent': 't-info', 'Not sent': 't-neutral', 'In transit': 't-info', 'Exception': 't-danger', 'Triaged': 't-ok', 'Not triaged': 't-warn', 'Failed': 't-danger' });
+
+/* ---------- Model ---------- */
+const TRI8 = {};
+const TRI_TYPES = ['Paid', 'Not Paid'];
+const CARRIERS_SHIP = ['UPS', 'FedEx', 'USPS', 'Courier'];
+function tri8(c) {
+  if (TRI8[c.id]) return TRI8[c.id];
+  const R = rxOf(c), st = TRI8[c.id] = { list: [], ships: [] };
+  const n = c.id.charCodeAt(5) + c.id.charCodeAt(6);
+  if (['Shipped', 'Pending Shipment'].includes(c.ship) || c.caseStatus === 'Active') {
+    const t0 = addDays(TODAY, -(18 + n % 10));
+    st.list.push({ written: R.cur.written, drug: R.cur.med, scheduled: `${fmt(addDays(t0, 2))} 11:30 AM`, transmit: `${fmt(t0)} 2:14 PM`, type: c.pap === 'Approved' ? 'Not Paid' : 'Paid', feed: 'Accepted', fax: n % 2 ? 'Delivered' : 'Not sent', by: 'Janet Mills', pharmacy: c.pharmacy, notes: 'Patient prefers delivery to home address.', docs: [R.cur.file] });
+    if (R.hist.length) st.list.push({ written: '6/1/2026', drug: R.hist[0].med, scheduled: '6/4/2026 10:00 AM', transmit: '6/2/2026 9:40 AM', type: 'Paid', feed: 'Accepted', fax: 'Delivered', by: 'Marketta Howie', pharmacy: c.pharmacy, notes: '', docs: [R.hist[0].file], replaced: true });
+    if (c.ship === 'Shipped') st.ships = [
+      { date: fmt(addDays(TODAY, -12)), qty: R.cur.qty, days: R.cur.days, carrier: 'UPS', track: '1Z84F0391' + (n % 90), status: 'Delivered', delivered: fmt(addDays(TODAY, -10)), fill: 'Refill 1' },
+      { date: fmt(addDays(TODAY, -42)), qty: R.cur.qty, days: R.cur.days, carrier: 'UPS', track: '1Z84F0118' + (n % 90), status: 'Delivered', delivered: fmt(addDays(TODAY, -40)), fill: 'Initial fill' }];
+  }
+  else if (isV8() && R.cur.status === 'Active') R.cur.triage = 'Not triaged';
+  return st;
+}
+const curTri = (c) => tri8(c).list[0] && !tri8(c).list[0].replaced ? tri8(c).list[0] : null;
+
+/* ---------- Prescription tab ---------- */
+const triFields = (t) => `<div class="tri-grid">
+  ${kv('Rx written date', `<span class="num">${esc(t.written)}</span>`)}<span></span><span></span>
+  ${kv('Drug', esc(t.drug))}${kv('Scheduled date', `<span class="num">${esc(t.scheduled)}</span>`)}<span></span>
+  ${kv('Transmit date', t.transmit ? `<span class="num">${esc(t.transmit)}</span>` : pill('Pending'))}${kv('Type', pill(t.type))}${kv('Feed status', pill(t.feed))}
+  ${kv('Fax status', pill(t.fax))}${kv('Triaged by', esc(t.by))}${kv('Pharmacy', esc(t.pharmacy))}
+  ${kv('Notes', t.notes ? esc(t.notes) : '<span class="muted">None</span>')}${t.docs.length ? kv('Documents', t.docs.map(d => docLink(d, { type: 'Prescription' })).join('<br>')) : ''}</div>`;
+const _tabRxV8 = tabRx;
+tabRx = function (c) {
+  if (isV8()) { tri8(c); if (curTri(c)) rxOf(c).cur.triage = 'Triaged'; }
+  let h = _tabRxV8(c); if (!isV8()) return h;
+  const T = tri8(c), t = curTri(c), R = rxOf(c);
+  h = h.replace('data-a="modal" data-v="triage"', 'data-a="modal" data-v="triage8"').replace(/<div class="fld"><span class="lbl">Shipment<\/span><span class="val">[\s\S]*?<\/span><\/div>/, `<div class="fld"><span class="lbl">Triage</span><span class="val">${pill(t ? 'Triaged' : 'Not triaged')}</span></div>`);
+  const triCard = `<div class="block" data-sec="Triage"><div class="section-t">${ic('flag', 15)}${t ? 'Triaged' : 'Triage'}<span class="sp"></span>${t ? `<button class="btn sm ghost" data-a="modal" data-v="triage8">${ic('refresh', 14)} Triage again</button>` : ''}</div>
+    ${t ? triFields(t) : `<div class="tri-empty">${ic('flag', 22)}<b>Not triaged yet</b><span class="muted">${R.cur.status === 'Active' ? 'Send this prescription to the specialty pharmacy when it is ready to fill.' : 'The current prescription is discontinued.'}</span>${R.cur.status === 'Active' ? `<button class="btn primary" data-a="modal" data-v="triage8">${ic('flag', 16)} Triage prescription</button>` : ''}</div>`}</div>`;
+  const shipCard = `<div class="block" data-sec="Shipments"><div class="section-t">${ic('box', 15)}Shipments<span class="sp"></span>${t ? `<button class="btn sm ghost" data-a="modal" data-v="ship8">${ic('plus', 14)} Record shipment</button>` : ''}</div>
+    ${T.ships.length ? `<div class="shiplist">${T.ships.map(s => `<div class="shiprow ${S.flash === 'ship0' && s === T.ships[0] ? 'flash' : ''}"><div class="sr-h"><b>${esc(s.fill)}</b>${pill(s.status)}<span class="muted num">Shipped ${esc(s.date)}</span></div>
+      <div class="sr-f"><span><span class="lbl">Quantity</span><span class="num">${esc(s.qty)} · ${esc(s.days)} days</span></span><span><span class="lbl">Carrier</span>${esc(s.carrier)}</span><span><span class="lbl">Tracking #</span><span class="mono">${esc(s.track)}</span></span><span><span class="lbl">Delivered</span><span class="num">${s.delivered ? esc(s.delivered) : '<span class="muted">Not yet</span>'}</span></span></div></div>`).join('')}</div>`
+      : `<div class="tri-empty">${ic('search', 22)}<b>No shipment history</b><span class="muted">${t ? 'Shipments from the pharmacy appear here.' : 'Shipments appear once the prescription is triaged.'}</span></div>`}</div>`;
+  const hist = T.list.length ? `<div class="block full" data-sec="Triage history"><div class="section-t">${ic('clock', 15)}Triage history</div><div class="tablewrap" style="margin:0 -16px"><table class="dt"><thead><tr><th>Transmitted</th><th>Drug</th><th>Scheduled</th><th>Type</th><th>Pharmacy</th><th>Feed</th><th>Fax</th><th>Triaged by</th></tr></thead><tbody>
+    ${T.list.map((x, i) => `<tr class="${i === 0 && S.flash === 'tri0' ? 'flash' : ''}"><td class="num">${esc(x.transmit || 'Pending')}${i === 0 && !x.replaced ? ' <span class="pill nodot t-ok" style="height:18px">Current</span>' : ''}</td><td>${esc(x.drug)}</td><td class="num">${esc(x.scheduled)}</td><td>${pill(x.type)}</td><td>${esc(x.pharmacy)}</td><td>${pill(x.feed)}</td><td>${pill(x.fax)}</td><td>${esc(x.by)}</td></tr>`).join('')}</tbody></table></div></div>` : '';
+  const i = h.indexOf('<div class="tablewrap">', h.indexOf('data-sec="Active prescription"'));
+  return h.slice(0, i) + `<div class="blocks tri-blocks">${triCard}${shipCard}${hist}</div><div class="section-t" style="margin:18px 0 8px">${ic('pill', 15)}Prescription history</div>` + h.slice(i);
+};
+
+/* ---------- Modals ---------- */
+const _xmV8 = extraModal;
+extraModal = function (m, wrap) {
+  const c = byId(S.caseId), e = m.err || {}, cancel = `<button class="btn" data-a="mclose">Cancel</button>`;
+  if (m.type === 'triage8') { const R = rxOf(c), t = curTri(c); if (!m.init) { m.init = 1; S.trd = new Set([R.cur.file]); }
+    return wide(wrap('Triage prescription', `<div class="note-banner">${ic('info', 16)}<span>Sends <b>${esc(R.cur.med)}</b>, written ${esc(R.cur.written)}, to the specialty pharmacy.${t ? ' The current triage moves to history.' : ''}</span></div>
+      <div class="polgrid">${inp('t8ph', 'Pharmacy', { req: 1, opts: PHARM, ph: false, v: (t || {}).pharmacy || c.pharmacy })}${inp('t8type', 'Type', { req: 1, opts: TRI_TYPES, ph: false, v: (t || {}).type || 'Paid' })}
+      ${inp('t8date', 'Scheduled date', { type: 'date', req: 1, err: e.date, v: isoOf(fmt(addDays(TODAY, 2))) })}${inp('t8time', 'Scheduled time', { type: 'time', v: '11:30' })}</div>
+      <div class="input ${e.via ? 'err' : ''}"><span class="lbl">Send to the pharmacy by <span class="req">*</span></span><div class="chkrow">${chk('t8feed', 'Electronic feed', true)}${chk('t8fax', 'Fax', false)}</div>${e.via ? errField('Choose the feed, fax or both') : ''}</div>
+      ${inp('t8notes', 'Notes', { area: 1, h: 70, opt: 1, phText: 'Anything the pharmacy should know' })}
+      <div class="input"><span class="lbl">Documents to include</span><div class="t8docs">${DOCS.slice(0, 7).map(d => d[0]).concat(R.cur.file).filter((x, i, a) => a.indexOf(x) === i).map(d => `<label class="fxpr"><input type="checkbox" data-a="t8doc" data-v="${esc(d)}" ${S.trd.has(d) ? 'checked' : ''}><span>${ic('file', 14)} ${esc(d)}${d === R.cur.file ? ' <span class="pill nodot t-ok" style="height:18px">Signed prescription</span>' : ''}</span></label>`).join('')}</div><button class="link-btn" data-a="t8up" style="margin-top:6px">${ic('upload', 14)} Upload another document</button></div>`,
+      `${cancel}<button class="btn primary" data-a="t8save">${ic('flag', 16)} Triage and send</button>`)); }
+  if (m.type === 'ship8') { const R = rxOf(c), T = tri8(c);
+    return wrap('Record shipment', `<div class="polgrid">${inp('s8fill', 'Fill', { opts: ['Initial fill', ...[1, 2, 3, 4, 5].map(n => 'Refill ' + n)], ph: false, v: T.ships.length ? 'Refill ' + T.ships.length : 'Initial fill' })}${inp('s8status', 'Status', { opts: ['Shipped', 'In transit', 'Delivered', 'Exception'], ph: false, v: 'Shipped' })}
+      ${inp('s8date', 'Ship date', { type: 'date', req: 1, err: e.date, v: isoOf(fmt(TODAY)) })}${inp('s8del', 'Delivered date', { type: 'date', opt: 1 })}
+      ${inp('s8qty', 'Quantity', { v: R.cur.qty })}${inp('s8days', 'Days supply', { v: R.cur.days })}
+      ${inp('s8car', 'Carrier', { opts: CARRIERS_SHIP, ph: false })}${inp('s8track', 'Tracking #', { req: 1, err: e.track })}</div><p class="muted" style="margin:0;font-size:12.5px">Shipments usually arrive from the pharmacy feed. Use this when the pharmacy reports one by phone or fax.</p>`,
+      `${cancel}<button class="btn primary" data-a="s8save">Save shipment</button>`); }
+  return _xmV8(m, wrap);
+};
+Object.assign(EXTRA, {
+  t8clr() {},
+  t8doc(t) { const d = t.dataset.v; S.trd.has(d) ? S.trd.delete(d) : S.trd.add(d); },
+  t8up() { const n = `Triage_attachment_${fmt(TODAY).replace(/\//g, '')}.pdf`; DOCS.unshift([n, 'Prescription', fmt(TODAY), ME, '180 KB', false, false]); S.trd.add(n); toast(`${n} uploaded`); },
+  t8save() { const c = byId(S.caseId), R = rxOf(c), T = tri8(c), err = {}; const date = val('t8date'), feed = val('t8feed'), fax = val('t8fax');
+    if (!date) err.date = 'Choose the scheduled date'; if (!feed && !fax) err.via = 1; if (Object.keys(err).length) { S.modal.err = err; return; }
+    const tm = val('t8time') || '11:30'; const [H, M] = tm.split(':').map(Number); const time = `${(H % 12) || 12}:${String(M).padStart(2, '0')} ${H < 12 ? 'AM' : 'PM'}`;
+    if (T.list[0]) T.list[0].replaced = true;
+    const rec = { written: R.cur.written, drug: R.cur.med, scheduled: `${usOf(date)} ${time}`, transmit: nowStamp(), type: val('t8type'), feed: feed ? 'Pending' : 'Not sent', fax: fax ? 'Pending' : 'Not sent', by: ME, pharmacy: val('t8ph'), notes: val('t8notes'), docs: [...S.trd] };
+    T.list.unshift(rec); R.cur.triage = 'Triaged'; c.pharmacy = rec.pharmacy; if (c.ship === 'No Shipment') c.ship = 'Pending Shipment';
+    if (fax) FAXES.unshift([nowStamp(), 'Outbound', `${rec.pharmacy} intake`, '1 (888) 555-0190', rec.docs.length * 2 + 1, 'Sent', { cover: true, docs: rec.docs.map(d => ({ name: d, pages: 2 })), note: 'Prescription triage. Please schedule the fill.' }]);
+    auditLog('Prescription', 'Prescription triaged', `${rec.pharmacy} · ${rec.type} · scheduled ${rec.scheduled} · ${[feed && 'feed', fax && 'fax'].filter(Boolean).join(' and ')}`);
+    flash('tri0'); S.modal = null; S.trd = null; toast(`Triaged and sent to ${rec.pharmacy}`);
+    setTimeout(() => { if (feed && rec.feed === 'Pending') rec.feed = 'Accepted'; if (fax && rec.fax === 'Pending') rec.fax = 'Delivered'; render(); }, 6000); },
+  s8save() { const c = byId(S.caseId), T = tri8(c), err = {}; if (!val('s8date')) err.date = 'Enter the ship date'; if (!val('s8track')) err.track = 'Enter the tracking number'; if (Object.keys(err).length) { S.modal.err = err; return; }
+    const s = { fill: val('s8fill'), status: val('s8status'), date: usOf(val('s8date')), delivered: val('s8del') ? usOf(val('s8del')) : '', qty: val('s8qty'), days: val('s8days'), carrier: val('s8car'), track: val('s8track') };
+    T.ships.unshift(s); c.ship = s.status === 'Delivered' || s.status === 'Shipped' ? 'Shipped' : c.ship; auditLog('Prescription', 'Shipment recorded', `${s.fill} · ${s.carrier} ${s.track}`); flash('ship0'); S.modal = null; toast('Shipment recorded'); }
+});
+/* Prescription history triage column reads the triage record */
+{ const _f = tabRx; tabRx = function (c) { let h = _f(c); if (!isV8()) return h; const R = rxOf(c); if (curTri(c)) R.cur.triage = 'Triaged'; return h; }; }
+
+const NOTES_V8 = { case: [['Triage sends the prescription to the pharmacy', 'Prescription tab: Triage prescription asks for pharmacy, type (Paid or Not Paid for now), scheduled date and time, feed, fax or both, notes and documents. The Triaged card shows the same fields as today, including transmit, feed and fax status.'], ['Triage history', 'Every triage is kept, and triaging again moves the current one to history.'], ['Shipments', 'The single shipment line is replaced by a shipments panel: fill, status, ship date, quantity, carrier, tracking number and delivered date. Record shipment covers ones reported by phone or fax.']] };
+/* Runs after every version is registered: a saved version pick only sticks until a newer version ships */
 verSticky(); applyApp();
 /* ================= Navigation model ================= */
 const NAV = [
@@ -4128,7 +4501,7 @@ function notesPanel() {
   const k0 = PARENT[S.route] && S.route !== 'case' ? PARENT[S.route] : S.route; const key = NOTES_MAP[k0] ? k0 : 'dashboard';
   return `<aside style="position:fixed;right:16px;top:60px;z-index:70;width:min(420px,calc(100vw - 32px));max-height:calc(100vh - 80px);overflow:auto" class="card" aria-label="Client feedback addressed">
   <div class="card-h"><h3>Feedback addressed on this screen</h3><button class="iconbtn" data-a="notes" aria-label="Close">${ic('x', 16)}</button></div>
-  <div>${[...(parseInt(S.ver.slice(1)) >= 6 ? (NOTES_V6[key] || []).map(x => ['V6 · ' + x[0], x[1]]) : []), ...(parseInt(S.ver.slice(1)) >= 5 ? (NOTES_V5[key] || []).map(x => ['V5 · ' + x[0], x[1]]) : []), ...(parseInt(S.ver.slice(1)) >= 4 ? (NOTES_V4[key] || []).map(x => ['V4 · ' + x[0], x[1]]) : []), ...(S.ver !== 'v1' ? (NOTES_V2[key] || []).map(x => ['V2 · ' + x[0], x[1]]) : []), ...NOTES_MAP[key]].map(([n, fix]) => `<div style="padding:10px 16px;border-bottom:1px solid var(--line-2);display:grid;grid-template-columns:18px 1fr;gap:4px 10px"><span style="color:var(--green)">${ic('check', 16)}</span><b style="font:600 13.5px var(--f-head)">${esc(n)}</b><span></span><span style="font-size:13px;color:var(--ink-2)">${esc(fix)}</span></div>`).join('')}</div>
+  <div>${[...(parseInt(S.ver.slice(1)) >= 8 ? (NOTES_V8[key] || []).map(x => ['V8 · ' + x[0], x[1]]) : []), ...(parseInt(S.ver.slice(1)) >= 7 ? (NOTES_V7[key] || []).map(x => ['V7 · ' + x[0], x[1]]) : []), ...(parseInt(S.ver.slice(1)) >= 6 ? (NOTES_V6[key] || []).map(x => ['V6 · ' + x[0], x[1]]) : []), ...(parseInt(S.ver.slice(1)) >= 5 ? (NOTES_V5[key] || []).map(x => ['V5 · ' + x[0], x[1]]) : []), ...(parseInt(S.ver.slice(1)) >= 4 ? (NOTES_V4[key] || []).map(x => ['V4 · ' + x[0], x[1]]) : []), ...(S.ver !== 'v1' ? (NOTES_V2[key] || []).map(x => ['V2 · ' + x[0], x[1]]) : []), ...NOTES_MAP[key]].map(([n, fix]) => `<div style="padding:10px 16px;border-bottom:1px solid var(--line-2);display:grid;grid-template-columns:18px 1fr;gap:4px 10px"><span style="color:var(--green)">${ic('check', 16)}</span><b style="font:600 13.5px var(--f-head)">${esc(n)}</b><span></span><span style="font-size:13px;color:var(--ink-2)">${esc(fix)}</span></div>`).join('')}</div>
   <div class="card-f muted">Showing ${VERSIONS.find(x => x[0] === S.ver)[1]} · ${VERSIONS.find(x => x[0] === S.ver)[2]}. Switch versions in the avatar menu.</div></aside>`;
 }
 
